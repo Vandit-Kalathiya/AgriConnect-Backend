@@ -7,7 +7,6 @@ import com.agriconnect.Contract.Farming.App.Entity.Order;
 import com.agriconnect.Contract.Farming.App.Repository.OrderRepository;
 import com.agriconnect.Contract.Farming.App.Service.AgreementBlockChainService;
 import com.agriconnect.Contract.Farming.App.Service.AgreementService;
-import com.github.openjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +44,9 @@ public class AgreementBlockChainController {
     public ResponseEntity<?> uploadAgreement(
             @RequestParam("file") MultipartFile file,
             @RequestParam("farmerAddress") String farmerAddress,
-            @RequestParam("buyerAddress") String buyerAddress
+            @RequestParam("buyerAddress") String buyerAddress,
+            @RequestParam("listingId") String listingId,
+            @RequestParam("amount") Long amount
     ) throws Exception {
         byte[] pdfBytes = file.getBytes();
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -65,6 +66,8 @@ public class AgreementBlockChainController {
         order.setStatus("created");
         order.setCreatedDate(LocalDate.now());
         order.setCreatedTime(LocalTime.now());
+        order.setListingId(listingId);
+        order.setAmount(amount);
         Order savedOrder = orderRepository.save(order);
 
         Agreement agreement = agreementService.uploadAgreement(file, txHash, pdfHash, savedOrder.getId());
@@ -85,8 +88,8 @@ public class AgreementBlockChainController {
     }
 
     @GetMapping("/all")
-    public ResponseEntity<List<String>> getAllAgreements() throws Exception {
-        List<String> hashes = agreementBlockChainService.getAllAgreementHashes();
+    public ResponseEntity<List<AgreementRegistry.Agreement>> getAllAgreements() throws Exception {
+        List<AgreementRegistry.Agreement> hashes = agreementBlockChainService.getAllAgreements();
         return ResponseEntity.ok(hashes);
     }
 

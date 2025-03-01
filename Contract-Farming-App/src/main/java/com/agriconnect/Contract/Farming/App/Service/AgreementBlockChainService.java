@@ -44,17 +44,32 @@ public class AgreementBlockChainService {
                 result.get(2).getValue().toString(),           // buyer
                 statusToString(((Uint8) result.get(3)).getValue()), // Convert status to string
                 ((Uint256) result.get(4)).getValue(),          // timestamp
-                result.get(5).getValue().toString(),
-                ((Uint256) result.get(6)).getValue(),
-                result.get(7).getValue().toString()
+                result.get(5).getValue().toString(),            // razorpayOrderId
+                ((Uint256) result.get(6)).getValue(),       // amount
+                result.get(7).getValue().toString()     // razorpayPaymentId
         );
     }
 
-    public List<String> getAllAgreementHashes() throws Exception {
+    public List<AgreementRegistry.Agreement> getAllAgreements() throws Exception {
+        // Step 1: Get all agreement hashes
         List<Type> result = agreementRegistry.getAllAgreementHashes().send();
         DynamicArray<Utf8String> hashes = (DynamicArray<Utf8String>) result.get(0);
-        return hashes.getValue().stream()
+        List<String> pdfHashes = hashes.getValue().stream()
                 .map(Utf8String::getValue)
+                .collect(Collectors.toList());
+
+        // Step 2: Fetch full Agreement details for each pdfHash
+        return pdfHashes.stream()
+                .map(pdfHash -> {
+                    try {
+                        return getAgreement(pdfHash);
+                    } catch (Exception e) {
+                        // Log the error and return null (or handle differently)
+                        System.err.println("Failed to fetch agreement for pdfHash: " + pdfHash + " - " + e.getMessage());
+                        return null;
+                    }
+                })
+                .filter(agreement -> agreement != null) // Filter out failed fetches
                 .collect(Collectors.toList());
     }
 
@@ -87,7 +102,7 @@ public class AgreementBlockChainService {
         logger.info("Deleting all agreements");
 
         // Get all hashes before deletion for file cleanup
-        List<String> hashes = getAllAgreementHashes();
+        List<AgreementRegistry.Agreement> hashes = getAllAgreements();
 
         // Delete from blockchain
         TransactionReceipt receipt = agreementRegistry.deleteAllAgreements().send();

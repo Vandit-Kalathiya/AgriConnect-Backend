@@ -53,7 +53,7 @@ public class PaymentController {
         response.put("pdfHash", pdfHash);
         response.put("keyId", razorpayKeyId);
         response.put("currency", "INR");
-        response.put("amount", String.valueOf(amount * 100));
+        response.put("amount", String.valueOf(amount*100));// changed
         return ResponseEntity.ok(response);
     }
 
@@ -90,9 +90,9 @@ public class PaymentController {
         return ResponseEntity.ok("Delivery confirmed, awaiting buyer verification");
     }
 
-    @PostMapping(value = "/verify-delivery", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/verify-delivery/{pdfHash}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> verifyDelivery(
-            @RequestParam("pdfHash") String pdfHash) throws Exception {
+            @PathVariable("pdfHash") String pdfHash) throws Exception {
         paymentService.verifyAndReleasePayment(pdfHash);
         return ResponseEntity.ok("Delivery verified, payment released to farmer");
     }

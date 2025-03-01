@@ -56,7 +56,7 @@ public class PaymentService {
         // Create Razorpay order
         RazorpayClient razorpay = new RazorpayClient(razorpayKeyId, razorpayKeySecret);
         JSONObject orderRequest = new JSONObject();
-        orderRequest.put("amount", amount * 100); // In paise
+        orderRequest.put("amount", amount*100); // In paise
         orderRequest.put("currency", currency);
         orderRequest.put("receipt", "agr_" + pdfHash.substring(0, 8));
         orderRequest.put("payment_capture", 0); // Manual capture for escrow-like behavior
@@ -100,7 +100,7 @@ public class PaymentService {
         com.razorpay.Payment payment = razorpay.payments.fetch(order.getRazorpayPaymentId());
         if ("authorized".equals(payment.get("status"))) {
             JSONObject captureRequest = new JSONObject();
-            captureRequest.put("amount", order.getAmount());
+            captureRequest.put("amount", order.getAmount()*100);
             captureRequest.put("currency", currency);
             razorpay.payments.capture(order.getRazorpayPaymentId(), captureRequest);
             order.setStatus("completed");
