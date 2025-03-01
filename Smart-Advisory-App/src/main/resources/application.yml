@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: Smart-Advisory-App
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+server:
+  port: 2528
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
