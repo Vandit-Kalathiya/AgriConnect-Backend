@@ -36,6 +36,15 @@ public class AuthController {
         }
     }
 
+    @PostMapping("/login/after/register")
+    public ResponseEntity<?> loginAfterRegister(@RequestBody JwtRequest jwtRequest, HttpServletResponse response) {
+        try {
+            return new ResponseEntity<>(authService.login(jwtRequest, response), HttpStatus.OK);
+        } catch (Exception e) {
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody JwtRequest jwtRequest, HttpServletResponse response) {
         try {

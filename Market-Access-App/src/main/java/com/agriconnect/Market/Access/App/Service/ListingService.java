@@ -16,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +35,9 @@ public class ListingService {
     public Listing addListing(ListingRequest listingRequest, List<MultipartFile> images) {
         Listing listing = new Listing();
 
+        // Define a DateTimeFormatter for the expected date format
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"); // Adjust this pattern as needed
+
         try {
             // Set listing details from request
             listing.setProductName(listingRequest.getProductName());
@@ -45,13 +49,13 @@ public class ListingService {
                     Long.parseLong(listingRequest.getFinalPrice()) : 0L);
 
             // Set AI generated price (default to 0L)
-            listing.setAiGeneratedPrice(0L);
+            listing.setAiGeneratedPrice(16L);
 
-            // Convert date strings to LocalDate
-            listing.setHarvestedDate(listingRequest.getHarvestedDate() != null ?
-                    LocalDate.parse(listingRequest.getHarvestedDate()) : null);
-            listing.setAvailabilityDate(listingRequest.getAvailabilityDate() != null ?
-                    LocalDate.parse(listingRequest.getAvailabilityDate()) : null);
+            // Convert date strings to LocalDate with custom formatter
+            listing.setHarvestedDate(listingRequest.getHarvestedDate() != null && !listingRequest.getHarvestedDate().isEmpty() ?
+                    LocalDate.parse(listingRequest.getHarvestedDate(), dateFormatter) : null);
+            listing.setAvailabilityDate(listingRequest.getAvailabilityDate() != null && !listingRequest.getAvailabilityDate().isEmpty() ?
+                    LocalDate.parse(listingRequest.getAvailabilityDate(), dateFormatter) : null);
 
             listing.setQualityGrade(listingRequest.getQualityGrade());
             listing.setStorageCondition(listingRequest.getStorageCondition());
@@ -90,16 +94,12 @@ public class ListingService {
                                 .listing(listing)
                                 .build();
 
-                        // You might want to generate a download URL here based on your storage strategy
-//                        image.setDownloadUrl("/images/" + image.getId()); // Placeholder
-
                         imageRepository.save(image);
                         listing.getImages().add(image);
                     }
                 }
                 // Update listing with images
                 listing = listingRepository.save(listing);
-
             }
 
             return listing;
@@ -107,7 +107,7 @@ public class ListingService {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid number format in listing request", e);
         } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("Invalid date format in listing request", e);
+            throw new IllegalArgumentException("Invalid date format in listing request. Expected format: yyyy-MM-dd", e);
         } catch (IOException e) {
             throw new RuntimeException("Failed to process image files", e);
         }
@@ -251,5 +251,10 @@ public class ListingService {
             return new ArrayList<>(); // Return empty list instead of null
         }
         return listings;
+    }
+
+        public List<Listing> getListingByFarmerContact(String farmerContact) {
+        return listingRepository.findByContactOfFarmer(farmerContact)
+               .orElseThrow(() -> new EntityNotFoundException("Listing not found for farmer contact: " + farmerContact));
     }
 }

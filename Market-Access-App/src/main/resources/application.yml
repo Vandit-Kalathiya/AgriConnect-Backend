@@ -12,6 +12,10 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
+  servlet: # Added servlet configuration for file uploads
+    multipart:
+      max-file-size: 10MB  # Maximum size for a single uploaded file
+      max-request-size: 10MB
 
 server:
   port: 2527

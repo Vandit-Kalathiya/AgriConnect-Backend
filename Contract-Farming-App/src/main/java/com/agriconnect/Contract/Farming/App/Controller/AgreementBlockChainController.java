@@ -70,7 +70,7 @@ public class AgreementBlockChainController {
         order.setAmount(amount);
         Order savedOrder = orderRepository.save(order);
 
-        Agreement agreement = agreementService.uploadAgreement(file, txHash, pdfHash, savedOrder.getId());
+        Agreement agreement = agreementService.uploadAgreement(file, txHash, pdfHash, savedOrder.getId(),farmerAddress,buyerAddress);
 
         logger.info("Successfully saved agreement to database");
 

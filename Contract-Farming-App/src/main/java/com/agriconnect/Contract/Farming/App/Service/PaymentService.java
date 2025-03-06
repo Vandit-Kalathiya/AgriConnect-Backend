@@ -136,13 +136,17 @@ public class PaymentService {
 
     public void rejectAndRefundPayment(String pdfHash) throws Exception {
         Order order = orderRepository.findByPdfHash(pdfHash);
-        if (order == null || !"delivered".equals(order.getStatus())) {
-            throw new Exception("Order not found or not delivered");
+        if (order == null || !"return_confirmed".equals(order.getStatus())) {
+            throw new Exception("Order not found or not return confirmed");
         }
 
         RazorpayClient razorpay = new RazorpayClient(razorpayKeyId, razorpayKeySecret);
         com.razorpay.Payment payment = razorpay.payments.fetch(order.getRazorpayPaymentId());
         if ("authorized".equals(payment.get("status"))) {
+            JSONObject captureRequest = new JSONObject();
+            captureRequest.put("amount", order.getAmount()*100);
+            captureRequest.put("currency", currency);
+            razorpay.payments.capture(order.getRazorpayPaymentId(), captureRequest);
             JSONObject refundRequest = new JSONObject();
             refundRequest.put("amount", order.getAmount());
             com.razorpay.Refund refund = razorpay.payments.refund(order.getRazorpayPaymentId(), refundRequest);

@@ -37,6 +37,9 @@ public class User implements UserDetails {
     @Lob
     private byte[] profilePicture;
 
+    @Lob
+    private byte[] signature;
+
     @Column(name = "email_verified", nullable = false)
     private boolean emailVerified = false;
 

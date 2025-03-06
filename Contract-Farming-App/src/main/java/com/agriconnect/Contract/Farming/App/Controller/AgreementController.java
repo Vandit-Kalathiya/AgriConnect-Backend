@@ -19,6 +19,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 
 import java.security.MessageDigest;
+import java.util.List;
 
 import static com.razorpay.Utils.bytesToHex;
 
@@ -43,7 +44,7 @@ public class AgreementController {
             TransactionReceipt receipt = agreementRegistry.addAgreement(pdfHash, farmerAddress, buyerAddress).send();
             logger.info("Agreement added to blockchain. Tx Hash: {}", receipt.getTransactionHash());
 
-            Agreement agreement = agreementService.uploadAgreement(file, receipt.getTransactionHash(), pdfHash,"");
+            Agreement agreement = agreementService.uploadAgreement(file, receipt.getTransactionHash(), pdfHash,"",farmerAddress,buyerAddress);
             logger.info("Agreement added to Database.");
 
             ResponseData responseData = ResponseData.builder()
@@ -103,5 +104,10 @@ public class AgreementController {
     @GetMapping("/get/{orderId}")
     public Agreement getAgreementByOrderId(@PathVariable String orderId) {
         return agreementService.getAgreementByOrderId(orderId);
-    } 
+    }
+
+    @GetMapping("/user/agreements/{userId}")
+    public ResponseEntity<List<Agreement>> getAgreementsByUserId(@PathVariable String userId) {
+        return ResponseEntity.ok(agreementService.getAgreementsByAddress(userId));
+    }
 }

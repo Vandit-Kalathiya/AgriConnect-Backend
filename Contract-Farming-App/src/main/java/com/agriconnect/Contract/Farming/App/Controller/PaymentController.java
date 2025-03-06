@@ -97,24 +97,24 @@ public class PaymentController {
         return ResponseEntity.ok("Delivery verified, payment released to farmer");
     }
 
-    @PostMapping(value = "/request-return", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/request-return/{pdfHash}/{returnTrackingNumber}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> requestReturn(
-            @RequestParam("pdfHash") String pdfHash,
-            @RequestParam("returnTrackingNumber") String returnTrackingNumber) throws Exception {
+            @PathVariable("pdfHash") String pdfHash,
+            @PathVariable("returnTrackingNumber") String returnTrackingNumber) throws Exception {
         paymentService.requestReturn(pdfHash, returnTrackingNumber);
         return ResponseEntity.ok("Return requested, awaiting farmer confirmation");
     }
 
-    @PostMapping(value = "/confirm-return", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/confirm-return/{pdfHash}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> confirmReturn(
-            @RequestParam("pdfHash") String pdfHash) throws Exception {
+            @PathVariable("pdfHash") String pdfHash) throws Exception {
         paymentService.confirmReturn(pdfHash);
         return ResponseEntity.ok("Return confirmed by farmer, buyer can now request refund");
     }
 
-    @PostMapping(value = "/reject-delivery", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/reject-delivery/{pdfHash}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> rejectDelivery(
-            @RequestParam("pdfHash") String pdfHash) throws Exception {
+            @PathVariable("pdfHash") String pdfHash) throws Exception {
         try {
             paymentService.rejectAndRefundPayment(pdfHash);
             return ResponseEntity.ok("Delivery rejected, payment refunded to buyer");

@@ -23,14 +23,15 @@ public class Agreement {
     private Long size;
     private String downloadUrl;
     private String orderId;
-
+    private String farmerAddress;
+    private String buyerAddress;
     private String transactionHash;
     private String pdfHash;
 
     @Lob
     private byte[] data;
 
-    public Agreement(String orderId,Long size, String fileName, String fileType, byte[] data, LocalDate createDate, LocalTime createTime,String transactionHash, String pdfHash) {
+    public Agreement(String farmerAddress, String buyerAddress, String orderId, Long size, String fileName, String fileType, byte[] data, LocalDate createDate, LocalTime createTime, String transactionHash, String pdfHash) {
         this.fileName = fileName;
         this.fileType = fileType;
         this.data = data;
@@ -40,6 +41,8 @@ public class Agreement {
         this.transactionHash = transactionHash;
         this.pdfHash = pdfHash;
         this.orderId = orderId;
+        this.farmerAddress = farmerAddress;
+        this.buyerAddress = buyerAddress;
 //        this.downloadUrl = downloadUrl;
     }
 

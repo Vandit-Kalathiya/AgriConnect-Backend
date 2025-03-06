@@ -106,4 +106,16 @@ public class ListingController {
             return new ResponseEntity<>("Unexpected error: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
+    @GetMapping("/user/{userContact}")
+    public ResponseEntity<?> getListingByUserContact(@PathVariable String userContact) {
+        try {
+            List<Listing> listing = listingService.getListingByFarmerContact(userContact);
+            return ResponseEntity.ok(listing);
+        } catch (EntityNotFoundException e) {
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.NOT_FOUND);
+        } catch (Exception e) {
+            return new ResponseEntity<>("Unexpected error: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 }
