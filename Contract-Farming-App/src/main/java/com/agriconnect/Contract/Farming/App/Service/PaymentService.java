@@ -96,6 +96,8 @@ public class PaymentService {
             throw new Exception("Order not found or not delivered");
         }
 
+
+
         RazorpayClient razorpay = new RazorpayClient(razorpayKeyId, razorpayKeySecret);
         com.razorpay.Payment payment = razorpay.payments.fetch(order.getRazorpayPaymentId());
         if ("authorized".equals(payment.get("status"))) {
@@ -112,14 +114,14 @@ public class PaymentService {
     }
 
     public void requestReturn(String pdfHash, String returnTrackingNumber) throws Exception {
+        agreementRegistry.requestReturn(pdfHash).send();
         Order order = orderRepository.findByPdfHash(pdfHash);
         if (order == null || !"delivered".equals(order.getStatus())) {
             throw new Exception("Order not found or not delivered");
         }
-        order.setReturnTrackingNumber(returnTrackingNumber);
+//        order.setReturnTrackingNumber(returnTrackingNumber);
         order.setStatus("return_requested");
         orderRepository.save(order);
-        agreementRegistry.requestReturn(pdfHash).send();
         logger.info("Return requested for order: {}", order.getRazorpayOrderId());
     }
 

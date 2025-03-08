@@ -22,7 +22,7 @@ import java.util.List;
 public class BlockChainConfig {
     private static final String API_URL = "http://localhost:7545";
     private static final String PRIVATE_KEY = "8e15211589550f4402e8173d8972ccdb008c0d573e32311c19babfb5fcbf3d61";
-    private static final String CONTRACT_ADDRESS = "0x6B33817877Bd43961eA7fBC99238da1EAa4C475e";
+    private static final String CONTRACT_ADDRESS = "0xB59322A40fD5168A1A08e7e1774f623082D25Eb3";
 
 
     @Bean

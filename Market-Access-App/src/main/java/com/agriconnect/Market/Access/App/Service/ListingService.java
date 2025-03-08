@@ -239,8 +239,8 @@ public class ListingService {
                 .orElseThrow(() -> new EntityNotFoundException("Listing not found with id: " + listingId));
         if (status.equalsIgnoreCase("archived")) {
             existingListing.setStatus(String.valueOf(ListingStatus.ARCHIVED));
-        }else if (status.equalsIgnoreCase("inactive")){
-            existingListing.setStatus(String.valueOf(ListingStatus.INACTIVE));
+        }else if (status.equalsIgnoreCase("purchased")){
+            existingListing.setStatus(String.valueOf(ListingStatus.PURCHASED));
         }
         return listingRepository.save(existingListing);
     }
