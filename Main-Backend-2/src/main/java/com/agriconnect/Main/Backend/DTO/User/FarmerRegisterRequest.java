@@ -1,4 +1,4 @@
-package com.agriconnect.Main.Backend.DTO.Farmer;
+package com.agriconnect.Main.Backend.DTO.User;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
