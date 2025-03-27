@@ -230,7 +230,7 @@ public class PdfGenerator {
         Table table = new Table(UnitValue.createPercentArray(new float[]{25, 75}))
                 .setWidth(UnitValue.createPercentValue(100));
 
-        addTableRow(table, "Total Value:", request.getPaymentTerms().getTotalValue(), fontBold, fontNormal);
+        addTableRow(table, "Total Value:", String.valueOf(Double.parseDouble(request.getCropDetails().getPricePerUnit())*Long.parseLong(request.getCropDetails().getQuantity())), fontBold, fontNormal);
         addTableRow(table, "Payment Method:", request.getPaymentTerms().getMethod(), fontBold, fontNormal);
         addTableRow(table, "Advance Payment:", request.getPaymentTerms().getAdvancePayment(), fontBold, fontNormal);
         addTableRow(table, "Balance Due:", request.getPaymentTerms().getBalanceDue(), fontBold, fontNormal);

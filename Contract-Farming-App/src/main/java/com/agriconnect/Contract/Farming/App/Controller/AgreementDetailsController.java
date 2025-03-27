@@ -23,8 +23,8 @@ public class AgreementDetailsController {
     }
 
     @PostMapping("/save")
-    public ResponseEntity<?> saveAgreementDetails(@RequestPart("farmerSignature") MultipartFile farmerSignature,
-                                                  @RequestPart("buyerSignature") MultipartFile buyerSignature,
+    public ResponseEntity<?> saveAgreementDetails(@RequestPart(value = "farmerSignature", required = false) MultipartFile farmerSignature,
+                                                  @RequestPart(value = "buyerSignature", required = false) MultipartFile buyerSignature,
                                                   @RequestPart("agreementDetails") AgreementDetails agreementDetails) {
         try {
             AgreementDetails savedAgreement = agreementDetailsService.saveAgreementDetails(farmerSignature,buyerSignature,agreementDetails);

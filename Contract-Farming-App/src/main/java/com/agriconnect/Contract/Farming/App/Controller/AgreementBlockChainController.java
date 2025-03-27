@@ -2,12 +2,10 @@ package com.agriconnect.Contract.Farming.App.Controller;
 
 import com.agriconnect.Contract.Farming.App.AgreementRegistry.AgreementRegistry;
 import com.agriconnect.Contract.Farming.App.DTO.UploadResponse;
-import com.agriconnect.Contract.Farming.App.Entity.Agreement;
 import com.agriconnect.Contract.Farming.App.Entity.Order;
 import com.agriconnect.Contract.Farming.App.Repository.OrderRepository;
 import com.agriconnect.Contract.Farming.App.Service.AgreementBlockChainService;
 import com.agriconnect.Contract.Farming.App.Service.AgreementService;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +13,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-
 
 import java.math.BigInteger;
 import java.security.MessageDigest;
@@ -25,110 +22,132 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/agreements")
-@Slf4j
 public class AgreementBlockChainController {
 
-    Logger logger = LoggerFactory.getLogger(this.getClass());
+    private static final Logger logger = LoggerFactory.getLogger(AgreementBlockChainController.class);
 
     @Value("${razorpay.currency}")
     private String currency;
 
     @Autowired
     private AgreementBlockChainService agreementBlockChainService;
+
     @Autowired
     private AgreementService agreementService;
+
     @Autowired
     private OrderRepository orderRepository;
 
     @PostMapping("/upload")
     public ResponseEntity<?> uploadAgreement(
-            @RequestParam("file") MultipartFile file,
+//            @RequestParam("file") MultipartFile file,
             @RequestParam("farmerAddress") String farmerAddress,
             @RequestParam("buyerAddress") String buyerAddress,
-            @RequestParam("listingId") String listingId,
-            @RequestParam("amount") Long amount
-    ) throws Exception {
-        byte[] pdfBytes = file.getBytes();
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] hashBytes = digest.digest(pdfBytes);
-        String pdfHash = bytesToHex(hashBytes);
+            @RequestParam("orderId") String orderId
+//            @RequestParam("amount") Long amount
+    ) {
+        try {
+//            byte[] pdfBytes = file.getBytes();
+//            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+//            byte[] hashBytes = digest.digest(pdfBytes);
+//            String pdfHash = bytesToHex(hashBytes);
 
-        String txHash = agreementBlockChainService.addAgreement(pdfHash, farmerAddress, buyerAddress);
+            String txHash = agreementBlockChainService.addAgreement(orderId, farmerAddress, buyerAddress);
+            logger.info("Successfully added agreement to blockchain with txHash: {}", txHash);
 
-        logger.info("Successfully added agreement to blockchain");
+//            Order order = new Order();
+//            order.setPdfHash(pdfHash);
+//            order.setFarmerAddress(farmerAddress);
+//            order.setBuyerAddress(buyerAddress);
+//            order.setCurrency(currency);
+//            order.setStatus("Pending");
+//            order.setCreatedDate(LocalDate.now());
+//            order.setCreatedTime(LocalTime.now());
+//            order.setAmount(amount);
+//            Order savedOrder = orderRepository.save(order);
+//
+//            agreementService.uploadAgreement(file, txHash, pdfHash, orderId, farmerAddress, buyerAddress);
+//            logger.info("Successfully saved agreement to database");
 
-
-        Order order = new Order();
-        order.setPdfHash(pdfHash);
-        order.setFarmerAddress(farmerAddress);
-        order.setBuyerAddress(buyerAddress);
-        order.setCurrency(currency);
-        order.setStatus("created");
-        order.setCreatedDate(LocalDate.now());
-        order.setCreatedTime(LocalTime.now());
-        order.setListingId(listingId);
-        order.setAmount(amount);
-        Order savedOrder = orderRepository.save(order);
-
-        Agreement agreement = agreementService.uploadAgreement(file, txHash, pdfHash, savedOrder.getId(),farmerAddress,buyerAddress);
-
-        logger.info("Successfully saved agreement to database");
-
-        return ResponseEntity.ok(UploadResponse.builder().pdfHash(pdfHash).txHash(txHash).downloadUrl(agreement.getDownloadUrl()).build());
+            return ResponseEntity.ok(UploadResponse.builder()
+                    .pdfHash(orderId)
+                    .txHash(txHash)
+                    .downloadUrl("") // Add logic for download URL if needed
+                    .build());
+        } catch (Exception e) {
+            logger.error("Error uploading agreement: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Error uploading agreement: " + e.getMessage());
+        }
     }
 
-    @GetMapping("/hash/{pdfHash}")
-    public ResponseEntity<AgreementRegistry.Agreement> getAgreement(@PathVariable String pdfHash) throws Exception {
+    @GetMapping("/hash/{orderId}")
+    public ResponseEntity<?> getAgreement(@PathVariable String orderId) {
         try {
-            AgreementRegistry.Agreement agreement = agreementBlockChainService.getAgreement(pdfHash);
+            AgreementRegistry.Agreement agreement = agreementBlockChainService.getAgreement(orderId);
             return ResponseEntity.ok(agreement);
         } catch (Exception e) {
-            return ResponseEntity.notFound().build();
+            logger.error("Error fetching agreement: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Error fetching agreement: " + e.getMessage());
         }
     }
 
     @GetMapping("/all")
-    public ResponseEntity<List<AgreementRegistry.Agreement>> getAllAgreements() throws Exception {
-        List<AgreementRegistry.Agreement> hashes = agreementBlockChainService.getAllAgreements();
-        return ResponseEntity.ok(hashes);
+    public ResponseEntity<?> getAllAgreements() {
+        try {
+            List<AgreementRegistry.Agreement> agreements = agreementBlockChainService.getAllAgreements();
+            return ResponseEntity.ok(agreements);
+        } catch (Exception e) {
+            logger.error("Error fetching all agreements: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Error fetching all agreements: " + e.getMessage());
+        }
     }
 
     @GetMapping("/count")
-    public ResponseEntity<BigInteger> getTotalAgreements() throws Exception {
-        BigInteger count = agreementBlockChainService.getTotalAgreements();
-        return ResponseEntity.ok(count);
+    public ResponseEntity<?> getTotalAgreements() {
+        try {
+            String count = agreementBlockChainService.getTotalAgreements();
+            return ResponseEntity.ok(count);
+        } catch (Exception e) {
+            logger.error("Error fetching total agreements: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Error fetching total agreements: " + e.getMessage());
+        }
     }
 
-    @PutMapping("/status/{pdfHash}")
-    public ResponseEntity<String> updateStatus(
-            @PathVariable String pdfHash,
+    @PutMapping("/status/{orderId}")
+    public ResponseEntity<?> updateStatus(
+            @PathVariable String orderId,
             @RequestParam("status") int status
-    ) throws Exception {
-        if (status < 0 || status > 3) {
-            return ResponseEntity.badRequest().body("Status must be 0-3");
+    ) {
+        try {
+            String txHash = agreementBlockChainService.updateAgreementStatus(orderId, status);
+            return ResponseEntity.ok(txHash);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            logger.error("Error updating status: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Error updating status: " + e.getMessage());
         }
-        String txHash = agreementBlockChainService.updateAgreementStatus(pdfHash, status);
-        return ResponseEntity.ok(txHash);
     }
 
-    @DeleteMapping("/hash/{pdfHash}")
-    public ResponseEntity<String> deleteAgreement(@PathVariable String pdfHash) throws Exception {
+    @DeleteMapping("/hash/{orderId}")
+    public ResponseEntity<?> deleteAgreement(@PathVariable String orderId) {
         try {
-            String txHash = agreementService.deleteAgreement(pdfHash);
+            String txHash = agreementBlockChainService.deleteAgreement(orderId);
             return ResponseEntity.ok(txHash);
         } catch (Exception e) {
-            return ResponseEntity.status(500).body(e.getMessage());
+            logger.error("Error deleting agreement: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Error deleting agreement: " + e.getMessage());
         }
     }
 
-    // New endpoint: Delete all agreements
     @DeleteMapping("/all")
-    public ResponseEntity<String> deleteAllAgreements() throws Exception {
+    public ResponseEntity<?> deleteAllAgreements() {
         try {
-            String txHash = agreementService.deleteAllAgreements();
+            String txHash = agreementBlockChainService.deleteAllAgreements();
             return ResponseEntity.ok(txHash);
         } catch (Exception e) {
-            return ResponseEntity.status(500).body(e.getMessage());
+            logger.error("Error deleting all agreements: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Error deleting all agreements: " + e.getMessage());
         }
     }
 

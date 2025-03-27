@@ -18,19 +18,21 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    private String pdfHash; // From your blockchain agreement
+    private String pdfHash;
     private String listingId;
     private String farmerAddress;
     private String buyerAddress;
-    private Long amount; // In smallest unit (paise for INR)
+    private Long quantity;
+    private Long amount;
     private String currency;
     private String razorpayOrderId;
     private String razorpayPaymentId;
     private String razorpaySignature;
-    private String status; // created, paid_pending_delivery, delivered, verified, completed, rejected, refunded
-    private String trackingNumber; // Optional: for tracking delivery
-    private String returnTrackingNumber; // For return to farmer
-    private String razorpayRefundId; // Refund ID if processed
+    private String status;
+    private String trackingNumber;
+    private String returnTrackingNumber;
+    private String razorpayRefundId;
+    private String agreementId;
 
     private LocalDate createdDate;
     private LocalTime createdTime;

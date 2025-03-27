@@ -85,10 +85,10 @@ public class ListingController {
         }
     }
 
-    @PutMapping("/{id}/{status}")
-    public ResponseEntity<?> updateListingStatus(@PathVariable String id, @PathVariable String status) {
+    @PutMapping("/{id}/{status}/{quantity}")
+    public ResponseEntity<?> updateListingStatus(@PathVariable String id, @PathVariable String status, @PathVariable String quantity) {
         try {
-            Listing updatedListing = listingService.updateListingStatus(id, status);
+            Listing updatedListing = listingService.updateListingStatus(id, status, quantity);
             return ResponseEntity.ok(updatedListing);
         } catch (EntityNotFoundException e) {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.NOT_FOUND);

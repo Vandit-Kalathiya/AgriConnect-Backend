@@ -7,6 +7,8 @@ import com.agriconnect.Market.Access.App.Entity.ListingStatus;
 import com.agriconnect.Market.Access.App.Repository.ImageRepository;
 import com.agriconnect.Market.Access.App.Repository.ListingRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +25,8 @@ import java.util.List;
 
 @Service
 public class ListingService {
+
+    private static final Logger logger = LoggerFactory.getLogger(ListingService.class);
 
     private final ListingRepository listingRepository;
     private final ImageRepository imageRepository; // Added ImageRepository
@@ -46,18 +50,18 @@ public class ListingService {
 
             // Convert and validate finalPrice
             listing.setFinalPrice(listingRequest.getFinalPrice() != null ?
-                    Long.parseLong(listingRequest.getFinalPrice()) : 0L);
+                    Double.parseDouble(listingRequest.getFinalPrice()) : 0L);
 
             // Set AI generated price (default to 0L)
-            listing.setAiGeneratedPrice(16L);
+            listing.setAiGeneratedPrice(listingRequest.getAiGeneratedPrice() != null ? Double.parseDouble(listingRequest.getAiGeneratedPrice()) : 0L);
 
             // Convert date strings to LocalDate with custom formatter
             listing.setHarvestedDate(listingRequest.getHarvestedDate() != null && !listingRequest.getHarvestedDate().isEmpty() ?
                     LocalDate.parse(listingRequest.getHarvestedDate(), dateFormatter) : null);
-            listing.setAvailabilityDate(listingRequest.getAvailabilityDate() != null && !listingRequest.getAvailabilityDate().isEmpty() ?
-                    LocalDate.parse(listingRequest.getAvailabilityDate(), dateFormatter) : null);
+//            listing.setAvailabilityDate(listingRequest.getAvailabilityDate() != null && !listingRequest.getAvailabilityDate().isEmpty() ?
+//                    LocalDate.parse(listingRequest.getAvailabilityDate(), dateFormatter) : null);
 
-            listing.setQualityGrade(listingRequest.getQualityGrade());
+//            listing.setQualityGrade(listingRequest.getQualityGrade());
             listing.setStorageCondition(listingRequest.getStorageCondition());
 
             // Convert and validate quantity
@@ -66,7 +70,7 @@ public class ListingService {
 
             listing.setUnitOfQuantity(listingRequest.getUnitOfQuantity());
             listing.setLocation(listingRequest.getLocation());
-            listing.setCertifications(listingRequest.getCertifications());
+//            listing.setCertifications(listingRequest.getCertifications());
 
             // Convert and validate shelfLifetime
             listing.setShelfLifetime(listingRequest.getShelfLifetime() != null ?
@@ -98,6 +102,11 @@ public class ListingService {
                         listing.getImages().add(image);
                     }
                 }
+
+                listing.setCreatedDate(LocalDate.now());
+                listing.setLastUpdatedDate(LocalDate.now());
+                listing.setCreatedTime(LocalTime.now());
+
                 // Update listing with images
                 listing = listingRepository.save(listing);
             }
@@ -129,17 +138,17 @@ public class ListingService {
                 existingListing.setProductType(listingRequest.getProductType());
             }
             if (listingRequest.getFinalPrice() != null) {
-                existingListing.setFinalPrice(Long.parseLong(listingRequest.getFinalPrice()));
+                existingListing.setFinalPrice(Double.parseDouble(listingRequest.getFinalPrice()));
             }
             if (listingRequest.getHarvestedDate() != null) {
                 existingListing.setHarvestedDate(LocalDate.parse(listingRequest.getHarvestedDate()));
             }
-            if (listingRequest.getAvailabilityDate() != null) {
-                existingListing.setAvailabilityDate(LocalDate.parse(listingRequest.getAvailabilityDate()));
-            }
-            if (listingRequest.getQualityGrade() != null) {
-                existingListing.setQualityGrade(listingRequest.getQualityGrade());
-            }
+//            if (listingRequest.getAvailabilityDate() != null) {
+//                existingListing.setAvailabilityDate(LocalDate.parse(listingRequest.getAvailabilityDate()));
+//            }
+//            if (listingRequest.getQualityGrade() != null) {
+//                existingListing.setQualityGrade(listingRequest.getQualityGrade());
+//            }
             if (listingRequest.getStorageCondition() != null) {
                 existingListing.setStorageCondition(listingRequest.getStorageCondition());
             }
@@ -152,9 +161,9 @@ public class ListingService {
             if (listingRequest.getLocation() != null) {
                 existingListing.setLocation(listingRequest.getLocation());
             }
-            if (listingRequest.getCertifications() != null) {
-                existingListing.setCertifications(listingRequest.getCertifications());
-            }
+//            if (listingRequest.getCertifications() != null) {
+//                existingListing.setCertifications(listingRequest.getCertifications());
+//            }
             if (listingRequest.getShelfLifetime() != null) {
                 existingListing.setShelfLifetime(Long.parseLong(listingRequest.getShelfLifetime()));
             }
@@ -234,13 +243,17 @@ public class ListingService {
         listingRepository.deleteById(listingId);
     }
 
-    public Listing updateListingStatus(String listingId, String status) {
+    public Listing updateListingStatus(String listingId, String status, String quantity) {
         Listing existingListing = listingRepository.findById(listingId)
                 .orElseThrow(() -> new EntityNotFoundException("Listing not found with id: " + listingId));
-        if (status.equalsIgnoreCase("archived")) {
-            existingListing.setStatus(String.valueOf(ListingStatus.ARCHIVED));
-        }else if (status.equalsIgnoreCase("purchased")){
-            existingListing.setStatus(String.valueOf(ListingStatus.PURCHASED));
+        long updatedQuantity = existingListing.getQuantity() - Long.parseLong(quantity);
+        existingListing.setQuantity(updatedQuantity < 0 ? 0 : existingListing.getQuantity() - Long.parseLong(quantity));
+        if (updatedQuantity == 0) {
+            if (status.equalsIgnoreCase("archived")) {
+                existingListing.setStatus(String.valueOf(ListingStatus.ARCHIVED));
+            } else if (status.equalsIgnoreCase("purchased")) {
+                existingListing.setStatus(String.valueOf(ListingStatus.PURCHASED));
+            }
         }
         return listingRepository.save(existingListing);
     }
@@ -253,8 +266,8 @@ public class ListingService {
         return listings;
     }
 
-        public List<Listing> getListingByFarmerContact(String farmerContact) {
+    public List<Listing> getListingByFarmerContact(String farmerContact) {
         return listingRepository.findByContactOfFarmer(farmerContact)
-               .orElseThrow(() -> new EntityNotFoundException("Listing not found for farmer contact: " + farmerContact));
+                .orElseThrow(() -> new EntityNotFoundException("Listing not found for farmer contact: " + farmerContact));
     }
 }

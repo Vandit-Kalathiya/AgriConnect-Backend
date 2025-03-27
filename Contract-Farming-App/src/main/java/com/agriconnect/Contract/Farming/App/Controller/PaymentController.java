@@ -1,5 +1,6 @@
 package com.agriconnect.Contract.Farming.App.Controller;
 
+import com.agriconnect.Contract.Farming.App.DTO.PaymentCreateOrderRequest;
 import com.agriconnect.Contract.Farming.App.Service.AgreementBlockChainService;
 import com.agriconnect.Contract.Farming.App.Entity.Order;
 import com.agriconnect.Contract.Farming.App.Repository.OrderRepository;
@@ -36,24 +37,25 @@ public class PaymentController {
     private PaymentService paymentService;
 
     @PostMapping(value = "/create-order", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Map<String, Object>> createOrder(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("farmerAddress") String farmerAddress,
-            @RequestParam("buyerAddress") String buyerAddress,
-            @RequestParam("orderId") String orderId,
-            @RequestParam("amount") Long amount) {
+    public ResponseEntity<Map<String, Object>> createOrder(PaymentCreateOrderRequest paymentCreateOrderRequest) {
         Map<String, Object> response = new HashMap<>();
         try {
-            byte[] pdfBytes = file.getBytes();
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(pdfBytes);
-            String pdfHash = bytesToHex(hashBytes);
+//            byte[] pdfBytes = file.getBytes();
+//            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+//            byte[] hashBytes = digest.digest(pdfBytes);
+//            String pdfHash = bytesToHex(hashBytes);
 
-            String razorpayOrderId = paymentService.createOrder(file, pdfHash, farmerAddress, buyerAddress, amount, orderId);
+            String farmerAddress = paymentCreateOrderRequest.getFarmerAddress();
+            String buyerAddress = paymentCreateOrderRequest.getBuyerAddress();
+            Long amount = paymentCreateOrderRequest.getAmount();
+            String orderId = paymentCreateOrderRequest.getOrderId();
+
+
+            String razorpayOrderId = paymentService.createOrder(farmerAddress, buyerAddress, amount, orderId);
 
             response.put("success", true);
             response.put("razorpayOrderId", razorpayOrderId);
-            response.put("pdfHash", pdfHash);
+//            response.put("pdfHash", pdfHash);
             response.put("keyId", razorpayKeyId);
             response.put("currency", "INR");
             response.put("amount", String.valueOf(amount * 100));
@@ -82,7 +84,7 @@ public class PaymentController {
                     order.setRazorpaySignature(signature);
                     order.setStatus("paid_pending_delivery");
                     orderRepository.save(order);
-                    paymentService.addPaymentDetails(order.getPdfHash(), paymentId, order.getAmount());
+                    paymentService.addPaymentDetails(order.getId(), paymentId, order.getAmount());
 
                     response.put("success", true);
                     response.put("message", "Payment authorized, awaiting delivery");
@@ -104,13 +106,13 @@ public class PaymentController {
         }
     }
 
-    @PostMapping(value = "/confirm-delivery/{pdfHash}/{trackingNumber}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/confirm-delivery/{orderId}/{trackingNumber}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> confirmDelivery(
-            @PathVariable("pdfHash") String pdfHash,
-            @PathVariable("trackingNumber") String trackingNumber) {
+            @PathVariable String orderId,
+            @PathVariable String trackingNumber) {
         Map<String, Object> response = new HashMap<>();
         try {
-            paymentService.confirmDelivery(pdfHash, trackingNumber);
+            paymentService.confirmDelivery(orderId, trackingNumber);
             response.put("success", true);
             response.put("message", "Delivery confirmed, awaiting buyer verification");
             return ResponseEntity.ok(response);
@@ -121,12 +123,12 @@ public class PaymentController {
         }
     }
 
-    @PostMapping(value = "/verify-delivery/{pdfHash}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/verify-delivery/{orderId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> verifyDelivery(
-            @PathVariable("pdfHash") String pdfHash) {
+            @PathVariable("orderId") String orderId) {
         Map<String, Object> response = new HashMap<>();
         try {
-            paymentService.verifyAndReleasePayment(pdfHash);
+            paymentService.verifyAndReleasePayment(orderId);
             response.put("success", true);
             response.put("message", "Delivery verified, payment released to farmer");
             return ResponseEntity.ok(response);
@@ -137,13 +139,13 @@ public class PaymentController {
         }
     }
 
-    @PostMapping(value = "/request-return/{pdfHash}/{returnTrackingNumber}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/request-return/{orderId}/{returnTrackingNumber}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> requestReturn(
-            @PathVariable("pdfHash") String pdfHash,
-            @PathVariable("returnTrackingNumber") String returnTrackingNumber) {
+            @PathVariable String orderId,
+            @PathVariable String returnTrackingNumber) {
         Map<String, Object> response = new HashMap<>();
         try {
-            paymentService.requestReturn(pdfHash, returnTrackingNumber);
+            paymentService.requestReturn(orderId, returnTrackingNumber);
             response.put("success", true);
             response.put("message", "Return requested, awaiting farmer confirmation");
             return ResponseEntity.ok(response);
@@ -154,12 +156,12 @@ public class PaymentController {
         }
     }
 
-    @PostMapping(value = "/confirm-return/{pdfHash}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/confirm-return/{orderId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> confirmReturn(
-            @PathVariable("pdfHash") String pdfHash) {
+            @PathVariable("orderId") String orderId) {
         Map<String, Object> response = new HashMap<>();
         try {
-            paymentService.confirmReturn(pdfHash);
+            paymentService.confirmReturn(orderId);
             response.put("success", true);
             response.put("message", "Return confirmed by farmer, buyer can now request refund");
             return ResponseEntity.ok(response);
@@ -170,12 +172,12 @@ public class PaymentController {
         }
     }
 
-    @PostMapping(value = "/reject-delivery/{pdfHash}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/reject-delivery/{orderId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> rejectDelivery(
-            @PathVariable("pdfHash") String pdfHash) {
+            @PathVariable("orderId") String orderId) {
         Map<String, Object> response = new HashMap<>();
         try {
-            paymentService.rejectAndRefundPayment(pdfHash);
+            paymentService.rejectAndRefundPayment(orderId);
             response.put("success", true);
             response.put("message", "Delivery rejected, payment refunded to buyer");
             return ResponseEntity.ok(response);

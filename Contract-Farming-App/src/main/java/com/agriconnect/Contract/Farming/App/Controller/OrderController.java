@@ -1,5 +1,6 @@
 package com.agriconnect.Contract.Farming.App.Controller;
 
+import com.agriconnect.Contract.Farming.App.DTO.OrderRequest;
 import com.agriconnect.Contract.Farming.App.Entity.Order;
 import com.agriconnect.Contract.Farming.App.Service.OrderService;
 import jakarta.persistence.EntityNotFoundException;
@@ -19,6 +20,16 @@ public class OrderController {
     @Autowired
     public OrderController(OrderService orderService) {
         this.orderService = orderService;
+    }
+
+    @PostMapping("/create")
+    public ResponseEntity<?> createOrder(@RequestBody OrderRequest orderRequest) {
+        try {
+            Order createdOrder = orderService.createOrder(orderRequest);
+            return ResponseEntity.status(HttpStatus.CREATED).body(createdOrder);
+        } catch (Exception e) {
+            return new ResponseEntity<>("Unexpected error: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     @GetMapping("/{id}")

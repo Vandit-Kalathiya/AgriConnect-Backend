@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,8 +26,8 @@ public class Listing {
     private String productName;
     private String productDescription;
     private String productType;
-    private Long finalPrice;
-    private Long aiGeneratedPrice;
+    private Double finalPrice;
+    private Double aiGeneratedPrice;
     private LocalDate harvestedDate;
     private LocalDate availabilityDate;
     private String qualityGrade;
@@ -37,7 +38,11 @@ public class Listing {
     private String certifications;
     private Long shelfLifetime;
     private String contactOfFarmer;
+    private Double rating = 0.0;
     private String status = String.valueOf(ListingStatus.ACTIVE);
+    private LocalDate createdDate;
+    private LocalDate lastUpdatedDate;
+    private LocalTime createdTime;
 
     @OneToMany(mappedBy = "listing", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @JsonManagedReference

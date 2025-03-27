@@ -1,10 +1,13 @@
 package com.agriconnect.Contract.Farming.App.Service;
 
+import com.agriconnect.Contract.Farming.App.DTO.OrderRequest;
 import com.agriconnect.Contract.Farming.App.Entity.Order;
 import com.agriconnect.Contract.Farming.App.Repository.OrderRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,5 +39,21 @@ public class OrderService {
             return new ArrayList<>();
         }
         return orders;
+    }
+
+    public Order createOrder(OrderRequest orderRequest) {
+        Order order = new Order();
+        order.setFarmerAddress(orderRequest.getFarmerAddress());
+        order.setBuyerAddress(orderRequest.getBuyerAddress());
+        order.setCurrency("INR");
+        order.setStatus("created");
+        order.setCreatedDate(LocalDate.now());
+        order.setCreatedTime(LocalTime.now());
+        order.setListingId(orderRequest.getListingId());
+        order.setAmount(orderRequest.getAmount());
+        order.setQuantity(Long.parseLong(orderRequest.getQuantity()));
+        order.setAgreementId(orderRequest.getAgreementId());
+
+        return orderRepository.save(order);
     }
 }

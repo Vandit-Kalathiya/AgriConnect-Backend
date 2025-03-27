@@ -27,3 +27,8 @@ spring:
 
 server:
   port: ${PORT}
+
+google:
+  maps:
+    api:
+      key: ${GOOGLE_MAP_API_KEY}

@@ -24,56 +24,71 @@ public class AgreementRegistry extends Contract {
         super(BINARY, contractAddress, web3j, credentials, gasProvider);
     }
 
-    public RemoteCall<TransactionReceipt> addAgreement(String pdfHash, String farmer, String buyer) {
+    public RemoteCall<TransactionReceipt> addAgreement(String orderId, String farmer, String buyer) {
         return executeRemoteCallTransaction(
                 new Function(
                         "addAgreement",
-                        Arrays.asList(new Utf8String(pdfHash), new Address(farmer), new Address(buyer)),
+                        Arrays.asList(new Utf8String(orderId), new Address(farmer), new Address(buyer)),
                         Collections.emptyList()
                 )
         );
     }
 
-    public RemoteCall<List<Type>> getAgreement(String pdfHash) {
-        return executeRemoteCallMultipleValueReturn(
+    public RemoteCall<TransactionReceipt> addPaymentDetails(String orderId, String paymentId, BigInteger amount) {
+        return executeRemoteCallTransaction(
                 new Function(
-                        "getAgreement",
-                        Arrays.asList(new Utf8String(pdfHash)),
-                        Arrays.asList(
-                                new TypeReference<Utf8String>() {},
-                                new TypeReference<Address>() {},
-                                new TypeReference<Address>() {},
-                                new TypeReference<Uint8>() {},
-                                new TypeReference<Uint256>() {},
-                                new TypeReference<Utf8String>() {},
-                                new TypeReference<Uint256>() {},
-                                new TypeReference<Utf8String>() {}
-                        )
+                        "addPaymentDetails",
+                        Arrays.asList(new Utf8String(orderId), new Utf8String(paymentId), new Uint256(amount)),
+                        Collections.emptyList()
                 )
         );
     }
 
-    public RemoteCall<TransactionReceipt> addPaymentDetails(String pdfHash, String paymentId, BigInteger amount) {
+    public RemoteCall<TransactionReceipt> requestReturn(String orderId) {
         return executeRemoteCallTransaction(
-                new Function("addPaymentDetails", Arrays.asList(new Utf8String(pdfHash), new Utf8String(paymentId), new Uint256(amount)), Collections.emptyList())
+                new Function(
+                        "requestReturn",
+                        Arrays.asList(new Utf8String(orderId)),
+                        Collections.emptyList()
+                )
         );
     }
 
-    public RemoteCall<TransactionReceipt> recordRefund(String pdfHash, String refundId) {
+    public RemoteCall<TransactionReceipt> confirmReturn(String orderId) {
         return executeRemoteCallTransaction(
-                new Function("recordRefund", Arrays.asList(new Utf8String(pdfHash), new Utf8String(refundId)), Collections.emptyList())
+                new Function(
+                        "confirmReturn",
+                        Arrays.asList(new Utf8String(orderId)),
+                        Collections.emptyList()
+                )
         );
     }
 
-    public RemoteCall<TransactionReceipt> requestReturn(String pdfHash) {
+    public RemoteCall<TransactionReceipt> recordRefund(String orderId, String refundId) {
         return executeRemoteCallTransaction(
-                new Function("requestReturn", Arrays.asList(new Utf8String(pdfHash)), Collections.emptyList())
+                new Function(
+                        "recordRefund",
+                        Arrays.asList(new Utf8String(orderId), new Utf8String(refundId)),
+                        Collections.emptyList()
+                )
         );
     }
 
-    public RemoteCall<TransactionReceipt> confirmReturn(String pdfHash) {
-        return executeRemoteCallTransaction(
-                new Function("confirmReturn", Arrays.asList(new Utf8String(pdfHash)), Collections.emptyList())
+    public RemoteCall<List<Type>> getAgreement(String orderId) {
+        return executeRemoteCallMultipleValueReturn(
+                new Function(
+                        "getAgreement",
+                        Arrays.asList(new Utf8String(orderId)),
+                        Arrays.asList(
+                                new TypeReference<Address>() {},    // farmer
+                                new TypeReference<Address>() {},    // buyer
+                                new TypeReference<Uint8>() {},      // status
+                                new TypeReference<Uint256>() {},    // timestamp
+                                new TypeReference<Utf8String>() {}, // paymentId
+                                new TypeReference<Uint256>() {},    // amount
+                                new TypeReference<Utf8String>() {}  // refundId
+                        )
+                )
         );
     }
 
@@ -87,29 +102,21 @@ public class AgreementRegistry extends Contract {
         );
     }
 
-    public RemoteCall<Uint256> getTotalAgreements() {
-        return executeRemoteCallSingleValueReturn(
-                new Function("getTotalAgreements", Collections.emptyList(),
-                        Arrays.asList(new TypeReference<Uint256>() {})),
-                Uint256.class
-        );
-    }
-
-    public RemoteCall<TransactionReceipt> updateAgreementStatus(String pdfHash, BigInteger status) {
+    public RemoteCall<TransactionReceipt> updateAgreementStatus(String orderId, BigInteger status) {
         return executeRemoteCallTransaction(
                 new Function(
                         "updateAgreementStatus",
-                        Arrays.asList(new Utf8String(pdfHash), new Uint8(status)),
+                        Arrays.asList(new Utf8String(orderId), new Uint8(status)),
                         Collections.emptyList()
                 )
         );
     }
 
-    public RemoteCall<TransactionReceipt> deleteAgreement(String pdfHash) {
+    public RemoteCall<TransactionReceipt> deleteAgreement(String orderId) {
         return executeRemoteCallTransaction(
                 new Function(
                         "deleteAgreement",
-                        Arrays.asList(new Utf8String(pdfHash)),
+                        Arrays.asList(new Utf8String(orderId)),
                         Collections.emptyList()
                 )
         );
@@ -125,23 +132,45 @@ public class AgreementRegistry extends Contract {
         );
     }
 
+    public RemoteCall<Uint256> getTotalAgreements() {
+        return executeRemoteCallSingleValueReturn(
+                new Function(
+                        "getTotalAgreements",
+                        Collections.emptyList(),
+                        Arrays.asList(new TypeReference<Uint256>() {})
+                ),
+                Uint256.class
+        );
+    }
+
+    public RemoteCall<Bool> agreementExists(String orderId) {
+        return executeRemoteCallSingleValueReturn(
+                new Function(
+                        "agreementExists",
+                        Arrays.asList(new Utf8String(orderId)),
+                        Arrays.asList(new TypeReference<Bool>() {})
+                ),
+                Bool.class
+        );
+    }
+
     public static AgreementRegistry load(String contractAddress, Web3j web3j, Credentials credentials, ContractGasProvider gasProvider) {
         return new AgreementRegistry(contractAddress, web3j, credentials, gasProvider);
     }
 
     public static class Agreement {
-        public String pdfHash;
+        public String orderId;
         public String farmer;
         public String buyer;
-        public String status;
+        public String status; // Changed to String for readability
         public BigInteger timestamp;
         public String paymentId;
         public BigInteger amount;
         public String refundId;
 
-        public Agreement(String pdfHash, String farmer, String buyer, String status, BigInteger timestamp,
+        public Agreement(String orderId, String farmer, String buyer, String status, BigInteger timestamp,
                          String paymentId, BigInteger amount, String refundId) {
-            this.pdfHash = pdfHash;
+            this.orderId = orderId;
             this.farmer = farmer;
             this.buyer = buyer;
             this.status = status;
