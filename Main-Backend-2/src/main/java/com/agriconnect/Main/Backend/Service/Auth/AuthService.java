@@ -1,6 +1,6 @@
 package com.agriconnect.Main.Backend.Service.Auth;
 
-import com.agriconnect.Main.Backend.DTO.Farmer.FarmerRegisterRequest;
+import com.agriconnect.Main.Backend.DTO.User.FarmerRegisterRequest;
 import com.agriconnect.Main.Backend.DTO.Jwt.JwtRequest;
 import com.agriconnect.Main.Backend.DTO.Jwt.JwtResponse;
 import com.agriconnect.Main.Backend.Entity.Session.Session;

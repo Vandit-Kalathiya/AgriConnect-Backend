@@ -1,5 +1,6 @@
 package com.agriconnect.Main.Backend.Controller;
 
+import com.agriconnect.Main.Backend.DTO.User.UserUpdateRequest;
 import com.agriconnect.Main.Backend.Entity.User.User;
 import com.agriconnect.Main.Backend.Service.UserService;
 import org.springframework.http.HttpStatus;
@@ -29,14 +30,35 @@ public class UserContoller {
     @PutMapping("/update/{id}")
     public ResponseEntity<User> updateUser(
             @PathVariable String id,
-            @RequestPart("user") User userDetails,
+            @RequestPart("userUpdateRequest") UserUpdateRequest userUpdateRequest,
             @RequestPart(value = "profilePicture", required = false) MultipartFile profilePicture,
             @RequestPart(value = "signatureImage", required = false) MultipartFile signatureImage) {
         try {
-            User updatedUser = userService.updateUser(id, userDetails, profilePicture, signatureImage);
+            User updatedUser = userService.updateUser(id, userUpdateRequest, profilePicture, signatureImage);
             return ResponseEntity.ok(updatedUser);
         } catch (Exception e) {
             return ResponseEntity.status(500).body(null);
+        }
+    }
+
+
+    @GetMapping("/profile-image/{id}")
+    public ResponseEntity<?> getUserProfileImage(@PathVariable String id) {
+        try {
+            byte[] profileImage = userService.getProfileImage(id);
+            return ResponseEntity.ok(profileImage);
+        } catch (Exception e) {
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @GetMapping("/signature-image/{id}")
+    public ResponseEntity<?> getUserSignatureImage(@PathVariable String id) {
+        try {
+            byte[] signatureImage = userService.getSignature(id);
+            return ResponseEntity.ok(signatureImage);
+        } catch (Exception e) {
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.BAD_REQUEST);
         }
     }
 }

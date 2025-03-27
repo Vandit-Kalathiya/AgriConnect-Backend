@@ -1,20 +1,16 @@
 package com.agriconnect.Main.Backend.Controller.Auth;
 
-import com.agriconnect.Main.Backend.DTO.Farmer.FarmerRegisterRequest;
+import com.agriconnect.Main.Backend.DTO.User.FarmerRegisterRequest;
 import com.agriconnect.Main.Backend.DTO.Jwt.JwtRequest;
 import com.agriconnect.Main.Backend.DTO.Jwt.JwtResponse;
-import com.agriconnect.Main.Backend.Repository.User.UserRepository;
 import com.agriconnect.Main.Backend.Service.Auth.AuthService;
 import com.agriconnect.Main.Backend.Service.Twilio.TwilioOtpService;
-import com.agriconnect.Main.Backend.jwt.JwtAuthenticationHelper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/auth")

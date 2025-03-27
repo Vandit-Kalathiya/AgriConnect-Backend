@@ -1,5 +1,6 @@
 package com.agriconnect.Main.Backend.Service;
 
+import com.agriconnect.Main.Backend.DTO.User.UserUpdateRequest;
 import com.agriconnect.Main.Backend.Entity.User.User;
 import com.agriconnect.Main.Backend.Repository.User.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -21,13 +22,13 @@ public class UserService {
         return userRepository.getUserByPhoneNumber(phoneNumber).orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
 
-    public User updateUser(String id, User userDetails, MultipartFile profilePicture, MultipartFile signatureImage) throws IOException {
+    public User updateUser(String id, UserUpdateRequest userUpdateRequest, MultipartFile profilePicture, MultipartFile signatureImage) throws IOException {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        user.setUsername(userDetails.getUsername());
-        user.setPhoneNumber(userDetails.getPhoneNumber());
-        user.setAddress(userDetails.getAddress());
+        user.setUsername(userUpdateRequest.getUsername());
+//        user.setPhoneNumber(userDetails.getPhoneNumber());
+        user.setAddress(userUpdateRequest.getAddress());
 
         if (profilePicture != null && !profilePicture.isEmpty()) {
             user.setProfilePicture(profilePicture.getBytes());
@@ -37,5 +38,20 @@ public class UserService {
         }
 
         return userRepository.save(user);
+    }
+
+
+    public byte[] getProfileImage(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        return user.getProfilePicture();
+    }
+
+    public byte[] getSignature(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        return user.getSignature();
     }
 }
