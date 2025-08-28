@@ -74,9 +74,7 @@ public class AuthService {
                 .emailVerified(true)
                 .build();
 
-        User savedUser = userRepository.save(farmer);
-
-        return savedUser;
+        return userRepository.save(farmer);
     }
 
     public static String generateRandomAddress() {

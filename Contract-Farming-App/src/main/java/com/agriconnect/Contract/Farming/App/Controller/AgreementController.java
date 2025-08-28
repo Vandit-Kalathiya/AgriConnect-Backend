@@ -1,6 +1,6 @@
 package com.agriconnect.Contract.Farming.App.Controller;
 
-import com.agriconnect.Contract.Farming.App.AgreementRegistry.AgreementRegistry;
+//import com.agriconnect.Contract.Farming.App.AgreementRegistry.AgreementRegistry;
 import com.agriconnect.Contract.Farming.App.DTO.ResponseData;
 import com.agriconnect.Contract.Farming.App.Entity.Agreement;
 import com.agriconnect.Contract.Farming.App.Service.AgreementService;
@@ -29,8 +29,9 @@ public class AgreementController {
 
     @Autowired
     private AgreementService agreementService;
-    @Autowired
-    private AgreementRegistry agreementRegistry;
+
+//    @Autowired
+//    private AgreementRegistry agreementRegistry;
 
     @PostMapping("/upload/{farmerAddress}/{buyerAddress}")
     public ResponseEntity<?> uploadAgreement(@RequestParam("file") MultipartFile file,
@@ -41,10 +42,10 @@ public class AgreementController {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hashBytes = digest.digest(pdfBytes);
             String pdfHash = bytesToHex(hashBytes);
-            TransactionReceipt receipt = agreementRegistry.addAgreement(pdfHash, farmerAddress, buyerAddress).send();
-            logger.info("Agreement added to blockchain. Tx Hash: {}", receipt.getTransactionHash());
+//            TransactionReceipt receipt = agreementRegistry.addAgreement(pdfHash, farmerAddress, buyerAddress).send();
+//            logger.info("Agreement added to blockchain. Tx Hash: {}", receipt.getTransactionHash());
 
-            Agreement agreement = agreementService.uploadAgreement(file, receipt.getTransactionHash(), pdfHash,"",farmerAddress,buyerAddress);
+            Agreement agreement = agreementService.uploadAgreement(file, pdfHash,"",farmerAddress,buyerAddress);
             logger.info("Agreement added to Database.");
 
             ResponseData responseData = ResponseData.builder()
@@ -109,5 +110,11 @@ public class AgreementController {
     @GetMapping("/user/agreements/{userId}")
     public ResponseEntity<List<Agreement>> getAgreementsByUserId(@PathVariable String userId) {
         return ResponseEntity.ok(agreementService.getAgreementsByAddress(userId));
+    }
+
+    // Get All Agreements
+    @GetMapping("/all")
+    public ResponseEntity<List<Agreement>> getAllAgreements() {
+        return ResponseEntity.ok(agreementService.getAllAgreements());
     }
 }

@@ -21,7 +21,7 @@ public class AgreementService {
     @Autowired
     private AgreementRepository agreementRepository;
 
-    public Agreement uploadAgreement(MultipartFile file, String transactionHash, String pdfHash, String orderId, String farmerAddress, String buyerAddress) throws Exception {
+    public Agreement uploadAgreement(MultipartFile file, String pdfHash, String orderId, String farmerAddress, String buyerAddress) throws Exception {
         String fileName = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename()));
         try {
             if (fileName.contains("..")) {
@@ -32,7 +32,7 @@ public class AgreementService {
             Agreement agreement
                     = new Agreement(farmerAddress, buyerAddress, orderId, file.getSize(), fileName,
                     file.getContentType(),
-                    file.getBytes(), LocalDate.now(), LocalTime.now(), transactionHash, pdfHash);
+                    file.getBytes(), LocalDate.now(), LocalTime.now(), "", pdfHash);
 
             Agreement savedAgreement = agreementRepository.save(agreement);
 
@@ -79,5 +79,9 @@ public class AgreementService {
 
     public List<Agreement> getAgreementsByAddress(String address) {
         return agreementRepository.findAgreementsByAddress(address);
+    }
+
+    public List<Agreement> getAllAgreements() {
+        return agreementRepository.findAll();
     }
 }

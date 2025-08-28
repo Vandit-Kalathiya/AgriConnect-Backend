@@ -54,4 +54,8 @@ public class UserService {
 
         return user.getSignature();
     }
+
+    public User getUserByUniqueId(String id) {
+        return userRepository.findUserByUniqueHexAddress(id).orElseThrow(() -> new EntityNotFoundException("User not found with unique id: " + id));
+    }
 }

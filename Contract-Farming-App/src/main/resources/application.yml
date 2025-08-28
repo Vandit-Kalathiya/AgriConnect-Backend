@@ -28,3 +28,7 @@ razorpay:
   currency: INR
   company:
     name: AgriConnect
+
+contract_address: ${CONTRACT_ADDRESS}
+private_key: ${PRIVATE_KEY}
+api_url: ${API_URL}

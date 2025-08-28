@@ -10,4 +10,6 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User,String> {
 
     Optional<User> getUserByPhoneNumber(String phoneNumber);
+
+    Optional<User> findUserByUniqueHexAddress(String uniqueHexAddress);
 }

@@ -27,6 +27,16 @@ public class UserContoller {
         }
     }
 
+    // Get User by unique ID
+    @GetMapping("/unique/{id}")
+    public ResponseEntity<?> getUserById(@PathVariable String id) {
+        try{
+            return new ResponseEntity<>(userService.getUserByUniqueId(id), HttpStatus.OK);
+        } catch (Exception e) {
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
+    }
+
     @PutMapping("/update/{id}")
     public ResponseEntity<User> updateUser(
             @PathVariable String id,

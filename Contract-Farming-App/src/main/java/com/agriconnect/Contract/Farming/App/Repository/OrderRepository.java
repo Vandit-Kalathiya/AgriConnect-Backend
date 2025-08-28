@@ -23,4 +23,8 @@ public interface OrderRepository extends JpaRepository<Order, String> {
 //    Order findByBuyerAddress(String buyerAddress);
     @Query("SELECT o FROM Order o WHERE o.farmerAddress = :userId OR o.buyerAddress = :userId")
     List<Order> findOrdersByUser(@Param("userId") String userId);
+
+    List<Order> findOrdersByBuyerAddressAndStatus(String buyerAddress, String completed);
+
+    List<Order> findOrdersByFarmerAddressAndStatus(String farmerAddress, String completed);
 }

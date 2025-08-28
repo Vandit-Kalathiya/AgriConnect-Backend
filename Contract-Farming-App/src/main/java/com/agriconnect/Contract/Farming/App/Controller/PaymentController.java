@@ -1,9 +1,10 @@
 package com.agriconnect.Contract.Farming.App.Controller;
 
 import com.agriconnect.Contract.Farming.App.DTO.PaymentCreateOrderRequest;
-import com.agriconnect.Contract.Farming.App.Service.AgreementBlockChainService;
+//import com.agriconnect.Contract.Farming.App.Service.AgreementBlockChainService;
 import com.agriconnect.Contract.Farming.App.Entity.Order;
 import com.agriconnect.Contract.Farming.App.Repository.OrderRepository;
+import com.agriconnect.Contract.Farming.App.Service.OrderService;
 import com.agriconnect.Contract.Farming.App.Service.PaymentService;
 import com.razorpay.Utils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,8 +22,8 @@ import java.util.Map;
 @RequestMapping("/api/payments")
 public class PaymentController {
 
-    @Autowired
-    private AgreementBlockChainService agreementBlockChainService;
+//    @Autowired
+//    private Ag    reementBlockChainService agreementBlockChainService;
 
     @Autowired
     private OrderRepository orderRepository;
@@ -35,6 +36,8 @@ public class PaymentController {
 
     @Autowired
     private PaymentService paymentService;
+    @Autowired
+    private OrderService orderService;
 
     @PostMapping(value = "/create-order", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> createOrder(PaymentCreateOrderRequest paymentCreateOrderRequest) {
@@ -84,10 +87,11 @@ public class PaymentController {
                     order.setRazorpaySignature(signature);
                     order.setStatus("paid_pending_delivery");
                     orderRepository.save(order);
-                    paymentService.addPaymentDetails(order.getId(), paymentId, order.getAmount());
+//                    paymentService.addPaymentDetails(order.getId(), paymentId, order.getAmount());
 
                     response.put("success", true);
                     response.put("message", "Payment authorized, awaiting delivery");
+                    response.put("data", order);
                     return ResponseEntity.ok(response);
                 } else {
                     response.put("success", false);
@@ -128,9 +132,10 @@ public class PaymentController {
             @PathVariable("orderId") String orderId) {
         Map<String, Object> response = new HashMap<>();
         try {
-            paymentService.verifyAndReleasePayment(orderId);
+            Order order = paymentService.verifyAndReleasePayment(orderId);
             response.put("success", true);
             response.put("message", "Delivery verified, payment released to farmer");
+            response.put("data", order);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             response.put("success", false);
@@ -185,6 +190,26 @@ public class PaymentController {
             response.put("success", false);
             response.put("message", "Failed to reject delivery: " + e.getMessage());
             return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    // Get All Payments of a Buyer by userId
+    @GetMapping("/buyer/{buyerAddress}")
+    public ResponseEntity<?> getPaymentsByBuyerAddress(@PathVariable String buyerAddress) {
+        try {
+            return ResponseEntity.ok(orderService.getAllCompletedOrdersByBuyer(buyerAddress));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error fetching payments: " + e.getMessage());
+        }
+    }
+
+    // Get All Payments of a Farmer by userId
+    @GetMapping("/farmer/{farmerAddress}")
+    public ResponseEntity<?> getPaymentsByFarmerAddress(@PathVariable String farmerAddress) {
+        try {
+            return ResponseEntity.ok(orderService.getAllCompletedOrdersByFarmer(farmerAddress));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error fetching payments: " + e.getMessage());
         }
     }
 

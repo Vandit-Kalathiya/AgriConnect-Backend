@@ -41,6 +41,23 @@ public class OrderService {
         return orders;
     }
 
+    // Get all orders by userId and status completed
+    public List<Order> getAllCompletedOrdersByBuyer(String buyerAddress) {
+        List<Order> orders = orderRepository.findOrdersByBuyerAddressAndStatus(buyerAddress, "completed");
+        if (orders.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return orders;
+    }
+
+    public List<Order> getAllCompletedOrdersByFarmer(String farmerAddress) {
+        List<Order> orders = orderRepository.findOrdersByFarmerAddressAndStatus(farmerAddress, "completed");
+        if (orders.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return orders;
+    }
+
     public Order createOrder(OrderRequest orderRequest) {
         Order order = new Order();
         order.setFarmerAddress(orderRequest.getFarmerAddress());

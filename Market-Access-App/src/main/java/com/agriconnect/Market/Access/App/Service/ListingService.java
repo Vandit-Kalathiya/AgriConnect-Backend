@@ -153,7 +153,9 @@ public class ListingService {
                 existingListing.setStorageCondition(listingRequest.getStorageCondition());
             }
             if (listingRequest.getQuantity() != null) {
-                existingListing.setQuantity(Long.parseLong(listingRequest.getQuantity()));
+                long existingQty = Long.parseLong(existingListing.getQuantity().toString());
+                long requestedQty = Long.parseLong(listingRequest.getQuantity());
+                existingListing.setQuantity(Long.parseLong(String.valueOf(Math.max(0, existingQty - requestedQty))));
             }
             if (listingRequest.getUnitOfQuantity() != null) {
                 existingListing.setUnitOfQuantity(listingRequest.getUnitOfQuantity());

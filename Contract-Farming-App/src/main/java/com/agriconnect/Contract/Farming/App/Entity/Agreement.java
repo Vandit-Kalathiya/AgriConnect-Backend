@@ -25,7 +25,7 @@ public class Agreement {
     private String orderId;
     private String farmerAddress;
     private String buyerAddress;
-    private String transactionHash;
+    private String transactionHash = "";
     private String pdfHash;
 
     @Lob

@@ -1,6 +1,6 @@
 package com.agriconnect.Contract.Farming.App.Service;
 
-import com.agriconnect.Contract.Farming.App.AgreementRegistry.AgreementRegistry;
+//import com.agriconnect.Contract.Farming.App.AgreementRegistry.AgreementRegistry;
 import com.agriconnect.Contract.Farming.App.Entity.Order;
 import com.agriconnect.Contract.Farming.App.Repository.OrderRepository;
 import com.razorpay.RazorpayClient;
@@ -17,6 +17,7 @@ import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import java.math.BigInteger;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 @Service
 public class PaymentService {
@@ -35,21 +36,21 @@ public class PaymentService {
     @Autowired
     private OrderRepository orderRepository;
 
-    @Autowired
-    private AgreementRegistry agreementRegistry;
+//    @Autowired
+//    private AgreementRegistry agreementRegistry;
 
     @Autowired
     private AgreementService agreementService;
 
-    public void addPaymentDetails(String orderId, String paymentId, Long amount) throws Exception {
-        TransactionReceipt receipt = agreementRegistry.addPaymentDetails(orderId, paymentId, BigInteger.valueOf(amount)).send();
-        logger.info("Payment details added to blockchain for hash: {}. Tx Hash: {}", orderId, receipt.getTransactionHash());
-    }
+//    public void addPaymentDetails(String orderId, String paymentId, Long amount) throws Exception {
+//        TransactionReceipt receipt = agreementRegistry.addPaymentDetails(orderId, paymentId, BigInteger.valueOf(amount)).send();
+//        logger.info("Payment details added to blockchain for hash: {}. Tx Hash: {}", orderId, receipt.getTransactionHash());
+//    }
 
     public String createOrder(String farmerAddress, String buyerAddress, Long amount, String orderId) throws Exception {
         // Add agreement to blockchain
-        TransactionReceipt receipt = agreementRegistry.addAgreement(orderId, farmerAddress, buyerAddress).send();
-        logger.info("Agreement added to blockchain. Tx Hash: {}", receipt.getTransactionHash());
+//        TransactionReceipt receipt = agreementRegistry.addAgreement(orderId, farmerAddress, buyerAddress).send();
+//        logger.info("Agreement added to blockchain. Tx Hash: {}", receipt.getTransactionHash());
 //
 //        agreementService.uploadAgreement(file, receipt.getTransactionHash(),pdfHash);
 //        logger.info("Agreement added to Database.");
@@ -91,7 +92,7 @@ public class PaymentService {
         logger.info("Delivery confirmed for order: {}", order.getRazorpayOrderId());
     }
 
-    public void verifyAndReleasePayment(String orderId) throws Exception {
+    public Order verifyAndReleasePayment(String orderId) throws Exception {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new EntityNotFoundException("Order not found"));
         if (order == null || !"delivered".equals(order.getStatus())) {
             throw new Exception("Order not found or not delivered");
@@ -107,9 +108,11 @@ public class PaymentService {
             order.setStatus("completed");
             orderRepository.save(order);
             logger.info("Payment captured and released for order: {}", order.getRazorpayOrderId());
+
         } else {
             throw new Exception("Payment not authorized");
         }
+        return order;
     }
 
     public void requestReturn(String orderId, String returnTrackingNumber) throws Exception {
@@ -122,7 +125,7 @@ public class PaymentService {
         order.setReturnTrackingNumber(returnTrackingNumber);
         order.setStatus("return_requested");
         orderRepository.save(order);
-        agreementRegistry.requestReturn(orderId).send();
+//        agreementRegistry.requestReturn(orderId).send();
         logger.info("Return requested for order: {}", order.getRazorpayOrderId());
     }
 
@@ -133,7 +136,7 @@ public class PaymentService {
         }
         order.setStatus("return_confirmed");
         orderRepository.save(order);
-        agreementRegistry.confirmReturn(orderId).send();
+//        agreementRegistry.confirmReturn(orderId).send();
         logger.info("Return confirmed for order: {}", order.getRazorpayOrderId());
     }
 
@@ -156,7 +159,7 @@ public class PaymentService {
             order.setRazorpayRefundId(refund.get("id"));
             order.setStatus("refunded");
             orderRepository.save(order);
-            agreementRegistry.recordRefund(orderId, refund.get("id")).send();
+//            agreementRegistry.recordRefund(orderId, refund.get("id")).send();
             logger.info("Payment refunded for order: {}. Refund ID: {}", order.getRazorpayOrderId(), refund.get("id"));
         } else if ("captured".equals(payment.get("status"))) {
             throw new Exception("Payment already captured, cannot refund directly");
