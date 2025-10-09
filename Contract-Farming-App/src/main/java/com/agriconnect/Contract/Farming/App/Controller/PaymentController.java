@@ -23,7 +23,7 @@ import java.util.Map;
 public class PaymentController {
 
 //    @Autowired
-//    private Ag    reementBlockChainService agreementBlockChainService;
+//    private AgreementBlockChainService agreementBlockChainService;
 
     @Autowired
     private OrderRepository orderRepository;

@@ -53,7 +53,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter
 				}
 			}
 		}
-		else if (requestHeader != null && requestHeader.startsWith("Bearer ")) {
+		else if (requestHeader != null && requestHeader.startsWith("Bearer  e")) {
 			token = requestHeader.substring(7);
 			phoneNumber = jwtHelper.getMobileNumberFromToken(token);
 
