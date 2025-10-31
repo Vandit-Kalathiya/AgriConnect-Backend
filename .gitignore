@@ -1,2 +1,32 @@
+
+# Environment files
 .env
-.idea
+.env.local
+.env.*.local
+
+# Application specific env files
+Main-Backend/.env
+Contract-Farming-App/.env
+Market-Access-App/.env
+Smart-Advisory-App/.env
+Generate-Agreement-App/.env
+Eureka-Main-Server/.env
+
+# IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Build files
+target/
+build/
+out/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
