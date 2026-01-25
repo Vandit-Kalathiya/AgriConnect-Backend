@@ -6,13 +6,12 @@ import com.agriconnect.Market.Access.App.Entity.Listing;
 import com.agriconnect.Market.Access.App.Entity.ListingStatus;
 import com.agriconnect.Market.Access.App.Repository.ImageRepository;
 import com.agriconnect.Market.Access.App.Repository.ListingRepository;
-import jakarta.persistence.EntityNotFoundException;
+import com.agriconnect.Market.Access.App.exception.BadRequestException;
+import com.agriconnect.Market.Access.App.exception.ResourceNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -24,12 +23,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
+@Transactional
 public class ListingService {
 
     private static final Logger logger = LoggerFactory.getLogger(ListingService.class);
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private final ListingRepository listingRepository;
-    private final ImageRepository imageRepository; // Added ImageRepository
+    private final ImageRepository imageRepository;
 
     public ListingService(ListingRepository listingRepository, ImageRepository imageRepository) {
         this.listingRepository = listingRepository;
@@ -37,12 +38,11 @@ public class ListingService {
     }
 
     public Listing addListing(ListingRequest listingRequest, List<MultipartFile> images) {
-        Listing listing = new Listing();
-
-        // Define a DateTimeFormatter for the expected date format
-        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"); // Adjust this pattern as needed
+        logger.info("Adding new listing for product: {}", listingRequest.getProductName());
 
         try {
+            Listing listing = new Listing();
+
             // Set listing details from request
             listing.setProductName(listingRequest.getProductName());
             listing.setProductDescription(listingRequest.getProductDescription());
@@ -53,15 +53,13 @@ public class ListingService {
                     Double.parseDouble(listingRequest.getFinalPrice()) : 0L);
 
             // Set AI generated price (default to 0L)
-            listing.setAiGeneratedPrice(listingRequest.getAiGeneratedPrice() != null ? Double.parseDouble(listingRequest.getAiGeneratedPrice()) : 0L);
+            listing.setAiGeneratedPrice(listingRequest.getAiGeneratedPrice() != null ? 
+                    Double.parseDouble(listingRequest.getAiGeneratedPrice()) : 0L);
 
             // Convert date strings to LocalDate with custom formatter
             listing.setHarvestedDate(listingRequest.getHarvestedDate() != null && !listingRequest.getHarvestedDate().isEmpty() ?
-                    LocalDate.parse(listingRequest.getHarvestedDate(), dateFormatter) : null);
-//            listing.setAvailabilityDate(listingRequest.getAvailabilityDate() != null && !listingRequest.getAvailabilityDate().isEmpty() ?
-//                    LocalDate.parse(listingRequest.getAvailabilityDate(), dateFormatter) : null);
+                    LocalDate.parse(listingRequest.getHarvestedDate(), DATE_FORMATTER) : null);
 
-//            listing.setQualityGrade(listingRequest.getQualityGrade());
             listing.setStorageCondition(listingRequest.getStorageCondition());
 
             // Convert and validate quantity
@@ -70,7 +68,6 @@ public class ListingService {
 
             listing.setUnitOfQuantity(listingRequest.getUnitOfQuantity());
             listing.setLocation(listingRequest.getLocation());
-//            listing.setCertifications(listingRequest.getCertifications());
 
             // Convert and validate shelfLifetime
             listing.setShelfLifetime(listingRequest.getShelfLifetime() != null ?
@@ -102,29 +99,34 @@ public class ListingService {
                         listing.getImages().add(image);
                     }
                 }
-
-                listing.setCreatedDate(LocalDate.now());
-                listing.setLastUpdatedDate(LocalDate.now());
-                listing.setCreatedTime(LocalTime.now());
-
-                // Update listing with images
-                listing = listingRepository.save(listing);
             }
 
+            listing.setCreatedDate(LocalDate.now());
+            listing.setLastUpdatedDate(LocalDate.now());
+            listing.setCreatedTime(LocalTime.now());
+
+            // Update listing with images
+            listing = listingRepository.save(listing);
+            
+            logger.info("Listing added successfully with ID: {}", listing.getId());
             return listing;
 
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid number format in listing request", e);
+            logger.error("Invalid number format in listing request", e);
+            throw new BadRequestException("Invalid number format in listing request", e);
         } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("Invalid date format in listing request. Expected format: yyyy-MM-dd", e);
+            logger.error("Invalid date format in listing request", e);
+            throw new BadRequestException("Invalid date format in listing request. Expected format: yyyy-MM-dd", e);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to process image files", e);
+            logger.error("Failed to process image files", e);
+            throw new BadRequestException("Failed to process image files", e);
         }
     }
 
     public Listing updateListing(String listingId, ListingRequest listingRequest, List<MultipartFile> images) {
+        logger.info("Updating listing with ID: {}", listingId);
         Listing existingListing = listingRepository.findById(listingId)
-                .orElseThrow(() -> new EntityNotFoundException("Listing not found with id: " + listingId));
+                .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
 
         try {
             // Update fields from request
@@ -210,13 +212,15 @@ public class ListingService {
     }
 
     public Listing getListingById(String listingId) {
+        logger.debug("Fetching listing with ID: {}", listingId);
         return listingRepository.findById(listingId)
-                .orElseThrow(() -> new EntityNotFoundException("Listing not found with id: " + listingId));
+                .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
     }
 
     public List<byte[]> getListingImages(String listingId) {
+        logger.debug("Fetching images for listing ID: {}", listingId);
         Listing listing = listingRepository.findById(listingId)
-                .orElseThrow(() -> new EntityNotFoundException("Listing not found with id: " + listingId));
+                .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
 
         List<byte[]> images = new ArrayList<>();
         for (Image image : listing.getImages()) {
@@ -226,16 +230,14 @@ public class ListingService {
     }
 
     public List<Listing> getAllListings() {
-        List<Listing> listings = listingRepository.findAll();
-        if (listings.isEmpty()) {
-            return new ArrayList<>(); // Return empty list instead of null
-        }
-        return listings;
+        logger.debug("Fetching all listings");
+        return listingRepository.findAll();
     }
 
     public void deleteListing(String listingId) {
+        logger.info("Deleting listing with ID: {}", listingId);
         Listing listing = listingRepository.findById(listingId)
-                .orElseThrow(() -> new EntityNotFoundException("Listing not found with id: " + listingId));
+                .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
 
         // Delete associated images
         if (!listing.getImages().isEmpty()) {
@@ -243,33 +245,41 @@ public class ListingService {
         }
 
         listingRepository.deleteById(listingId);
+        logger.info("Listing deleted successfully with ID: {}", listingId);
     }
 
     public Listing updateListingStatus(String listingId, String status, String quantity) {
+        logger.info("Updating status for listing ID: {} to status: {}", listingId, status);
+        
         Listing existingListing = listingRepository.findById(listingId)
-                .orElseThrow(() -> new EntityNotFoundException("Listing not found with id: " + listingId));
-        long updatedQuantity = existingListing.getQuantity() - Long.parseLong(quantity);
-        existingListing.setQuantity(updatedQuantity < 0 ? 0 : existingListing.getQuantity() - Long.parseLong(quantity));
-        if (updatedQuantity == 0) {
+                .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
+        
+        long quantityValue = Long.parseLong(quantity);
+        long updatedQuantity = existingListing.getQuantity() - quantityValue;
+        
+        existingListing.setQuantity(Math.max(0, updatedQuantity));
+        
+        if (updatedQuantity <= 0) {
             if (status.equalsIgnoreCase("archived")) {
                 existingListing.setStatus(String.valueOf(ListingStatus.ARCHIVED));
             } else if (status.equalsIgnoreCase("purchased")) {
                 existingListing.setStatus(String.valueOf(ListingStatus.PURCHASED));
             }
         }
-        return listingRepository.save(existingListing);
+        
+        Listing updated = listingRepository.save(existingListing);
+        logger.info("Listing status updated successfully for ID: {}", listingId);
+        return updated;
     }
 
     public List<Listing> getActiveListings() {
-        List<Listing> listings = listingRepository.findActiveListings();
-        if (listings.isEmpty()) {
-            return new ArrayList<>(); // Return empty list instead of null
-        }
-        return listings;
+        logger.debug("Fetching active listings");
+        return listingRepository.findActiveListings();
     }
 
     public List<Listing> getListingByFarmerContact(String farmerContact) {
+        logger.debug("Fetching listings for farmer contact: {}", farmerContact);
         return listingRepository.findByContactOfFarmer(farmerContact)
-                .orElseThrow(() -> new EntityNotFoundException("Listing not found for farmer contact: " + farmerContact));
+                .orElseThrow(() -> new ResourceNotFoundException("Listing", "farmerContact", farmerContact));
     }
 }

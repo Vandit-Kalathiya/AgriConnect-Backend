@@ -1,28 +1,38 @@
 spring:
   application:
     name: Eureka-Main-Server
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+server:
+  port: ${PORT:8761}
+  compression:
+    enabled: true
 
 eureka:
   client:
     registerWithEureka: false
     fetchRegistry: false
+  server:
+    enable-self-preservation: ${EUREKA_SELF_PRESERVATION:true}
+    eviction-interval-timer-in-ms: 60000
+    renewal-threshold-update-interval-ms: 900000
+  instance:
+    hostname: ${EUREKA_HOSTNAME:localhost}
 
-#    service-url:
-#      defaultZone: http://localhost:8761/eureka/
-#  server:
-#    wait-time-in-ms-when-sync-empty: 0
-#    enable-self-preservation: false
-#  instance:
-#    hostname: localhost
-#    prefer-ip-address: true
-#
-#management:
-#  endpoints:
-#    web:
-#      exposure:
-#        include: "*"
-#  endpoint:
-#    health:
-#      show-details: always
-server:
-  port: 8761
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.netflix.eureka: ${LOG_LEVEL_EUREKA:INFO}
+    com.netflix.discovery: ${LOG_LEVEL_DISCOVERY:INFO}
+  file:
+    name: ${LOG_FILE:logs/eureka-server.log}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized

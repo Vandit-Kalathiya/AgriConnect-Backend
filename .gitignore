@@ -1,32 +1,233 @@
 
-# Environment files
+# ========================================
+# Environment & Configuration Files
+# ========================================
+# IMPORTANT: Never commit .env files containing sensitive data!
+
+# Root level env files
 .env
 .env.local
+.env.development
+.env.test
+.env.production
 .env.*.local
 
-# Application specific env files
+# Service-specific env files (explicit paths)
 Main-Backend/.env
+Main-Backend/.env.local
+Main-Backend/.env.*
 Contract-Farming-App/.env
+Contract-Farming-App/.env.local
+Contract-Farming-App/.env.*
 Market-Access-App/.env
+Market-Access-App/.env.local
+Market-Access-App/.env.*
 Smart-Advisory-App/.env
+Smart-Advisory-App/.env.local
+Smart-Advisory-App/.env.*
 Generate-Agreement-App/.env
+Generate-Agreement-App/.env.local
+Generate-Agreement-App/.env.*
 Eureka-Main-Server/.env
+Eureka-Main-Server/.env.local
+Eureka-Main-Server/.env.*
 
-# IDE files
+# Pattern matching for any .env files (recursive)
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Keep .env.example files (these should be committed)
+!.env.example
+!**/.env.example
+
+# ========================================
+# IDE & Editor Files
+# ========================================
+# IntelliJ IDEA
 .idea/
 *.iml
 *.ipr
 *.iws
-
-# Build files
-target/
-build/
+.idea_modules/
 out/
 
-# OS files
-.DS_Store
-Thumbs.db
+# Eclipse
+.classpath
+.project
+.settings/
+.metadata/
 
-# Logs
+# VS Code
+.vscode/
+*.code-workspace
+
+# NetBeans
+nbproject/
+nbbuild/
+dist/
+nbdist/
+
+# ========================================
+# Build & Compilation Files
+# ========================================
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Gradle
+.gradle/
+build/
+!gradle-wrapper.jar
+
+# ========================================
+# Operating System Files
+# ========================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ========================================
+# Logs & Temporary Files
+# ========================================
+# Log files
 *.log
 logs/
+log/
+*.log.*
+*.log.gz
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~.nib
+*.bak
+*.cache
+
+# ========================================
+# Spring Boot Specific
+# ========================================
+# Spring Boot DevTools
+.spring-boot-devtools.properties
+
+# Application properties backup
+application-*.properties.bak
+application-*.yml.bak
+
+# ========================================
+# Database Files
+# ========================================
+# H2 Database
+*.db
+*.trace.db
+*.lock.db
+
+# SQLite
+*.sqlite
+*.sqlite3
+
+# ========================================
+# Security & Credentials
+# ========================================
+# SSH keys
+*.pem
+*.key
+*.pub
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+
+# SSL/TLS certificates
+*.crt
+*.cer
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.truststore
+
+# Credentials files
+credentials.json
+secrets.json
+*-credentials.json
+*-secrets.json
+
+# ========================================
+# Test & Coverage Reports
+# ========================================
+# JUnit
+junit/
+TEST-*.xml
+
+# Coverage reports
+*.exec
+*.coverage
+jacoco.exec
+coverage/
+
+# ========================================
+# Package Files
+# ========================================
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Exclude wrapper jars (these should be kept)
+!.mvn/wrapper/maven-wrapper.jar
+!gradle-wrapper.jar
+
+# ========================================
+# Node.js (if applicable)
+# ========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========================================
+# Docker
+# ========================================
+.dockerignore
+docker-compose.override.yml
+
+# ========================================
+# Misc
+# ========================================
+*.class
+hs_err_pid*
+replay_pid*
+.factorypath
+.recommenders/
+.apt_generated/
+.apt_generated_test/
+*.hprof

@@ -8,17 +8,19 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Component
 public class JwtAuthenticationHelper {
 
-
     private final BlackListedTokenRepo blackListedTokenRepo;
+    
     @Value("${jwt.secret}")
     private String SECRET_KEY;
 
@@ -33,6 +35,11 @@ public class JwtAuthenticationHelper {
         this.blackListedTokenRepo = blackListedTokenRepo;
     }
 
+    private SecretKey getSigningKey() {
+        byte[] keyBytes = SECRET_KEY.getBytes(StandardCharsets.UTF_8);
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
+
     public String getMobileNumberFromToken(String token) {
         Claims claims = getClaimsFromToken(token);
         return claims.getSubject();
@@ -40,7 +47,10 @@ public class JwtAuthenticationHelper {
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parser().setSigningKey(SECRET_KEY).parseClaimsJws(token);
+            Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token);
             return true;
         } catch (Exception e) {
             return false;
@@ -48,8 +58,11 @@ public class JwtAuthenticationHelper {
     }
 
     public Claims getClaimsFromToken(String token) {
-        Claims claims = Jwts.parserBuilder().setSigningKey(SECRET_KEY.getBytes())
-                .build().parseClaimsJws(token).getBody();
+        Claims claims = Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
         return claims;
     }
 
@@ -62,21 +75,11 @@ public class JwtAuthenticationHelper {
     public String generateToken(String phoneNumber) {
         Map<String, Object> claims = createClaims(phoneNumber);
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(phoneNumber)
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + JWT_TOKEN_VALIDITY * 1000))
-                .signWith(
-                        new SecretKeySpec(SECRET_KEY.getBytes(), SignatureAlgorithm.HS512.getJcaName()),
-                        SignatureAlgorithm.HS512
-                )
-                .serializeToJsonWith(claimsMap -> {
-                    try {
-                        return objectMapper.writeValueAsString(claimsMap).getBytes();
-                    } catch (JsonProcessingException e) {
-                        throw new IllegalArgumentException("Error serializing claims to JSON", e);
-                    }
-                })
+                .claims(claims)
+                .subject(phoneNumber)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + JWT_TOKEN_VALIDITY * 1000))
+                .signWith(getSigningKey(), Jwts.SIG.HS512)
                 .compact();
     }
 
@@ -86,12 +89,12 @@ public class JwtAuthenticationHelper {
         return claims;
     }
 
-    private SecretKeySpec getSigningKey() {
-        return new SecretKeySpec(SECRET_KEY.getBytes(), SignatureAlgorithm.HS512.getJcaName());
-    }
-
     private List<String> extractRoles(String token) {
-        Claims claims = Jwts.parser().setSigningKey(getSigningKey()).parseClaimsJws(token).getBody();
+        Claims claims = Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
         return claims.get("roles", List.class);
     }
 
@@ -101,7 +104,6 @@ public class JwtAuthenticationHelper {
 
     public boolean isBlacklisted(String token) {
         Optional<BlackListedToken> blackListedToken = blackListedTokenRepo.findByToken(token);
-
         return blackListedToken.isPresent();
     }
 }
