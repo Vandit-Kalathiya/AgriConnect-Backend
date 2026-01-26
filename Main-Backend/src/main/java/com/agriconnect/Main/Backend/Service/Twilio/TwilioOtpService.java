@@ -2,6 +2,7 @@ package com.agriconnect.Main.Backend.Service.Twilio;
 
 import com.agriconnect.Main.Backend.config.TwilioProperties;
 import com.agriconnect.Main.Backend.exception.BadRequestException;
+import com.agriconnect.Main.Backend.util.PhoneNumberUtil;
 import com.twilio.Twilio;
 import com.twilio.exception.ApiException;
 import com.twilio.rest.api.v2010.account.Call;
@@ -41,14 +42,21 @@ public class TwilioOtpService {
         @Getter
         private final String otp;
         private final long creationTime;
+        @Getter
+        private boolean used;
 
         public OtpEntry(String otp) {
             this.otp = otp;
             this.creationTime = Instant.now().toEpochMilli();
+            this.used = false;
         }
 
         public boolean isExpired() {
             return (Instant.now().toEpochMilli() - creationTime) > OTP_EXPIRY_DURATION;
+        }
+        
+        public void markAsUsed() {
+            this.used = true;
         }
     }
 
@@ -74,30 +82,37 @@ public class TwilioOtpService {
             throw new BadRequestException("Phone number cannot be empty");
         }
 
+        // Normalize phone number to 10-digit format
+        String normalizedNumber = PhoneNumberUtil.normalize(toPhoneNumber);
+        logger.debug("Normalized phone number: {} -> {}", toPhoneNumber, normalizedNumber);
+
         String otp = generateOtp();
         String messageBody = "Your AgriConnect verification code is: " + otp + ". Valid for 5 minutes.";
 
-        // Store OTP with timestamp
-        otpStore.put(toPhoneNumber, new OtpEntry(otp));
-        logger.info("Generated OTP for phone number: {}", toPhoneNumber);
+        // Store OTP with normalized number as key
+        otpStore.put(normalizedNumber, new OtpEntry(otp));
+        logger.info("Generated and stored OTP for normalized phone number: {}", normalizedNumber);
 
         try {
+            // Format number for Twilio (+91 prefix)
+            String twilioFormattedNumber = PhoneNumberUtil.formatForTwilio(normalizedNumber);
+            
             Message message = Message.creator(
-                    new PhoneNumber("+91" + toPhoneNumber),
+                    new PhoneNumber(twilioFormattedNumber),
                     new PhoneNumber(twilioProperties.getPhoneNumber()),
                     messageBody
             ).create();
 
-            logger.info("OTP sent successfully to {}, Message SID: {}", toPhoneNumber, message.getSid());
+            logger.info("OTP sent successfully to {}, Message SID: {}", normalizedNumber, message.getSid());
             return otp;
 
         } catch (ApiException e) {
-            logger.error("Twilio API error while sending OTP to {}: {}", toPhoneNumber, e.getMessage(), e);
-            otpStore.remove(toPhoneNumber); // Remove OTP if sending failed
+            logger.error("Twilio API error while sending OTP to {}: {}", normalizedNumber, e.getMessage(), e);
+            otpStore.remove(normalizedNumber); // Remove OTP if sending failed
             throw new BadRequestException("Failed to send OTP. Please check your phone number and try again.");
         } catch (Exception e) {
-            logger.error("Unexpected error while sending OTP to {}: {}", toPhoneNumber, e.getMessage(), e);
-            otpStore.remove(toPhoneNumber);
+            logger.error("Unexpected error while sending OTP to {}: {}", normalizedNumber, e.getMessage(), e);
+            otpStore.remove(normalizedNumber);
             throw new BadRequestException("Failed to send OTP. Please try again later.");
         }
     }
@@ -108,34 +123,50 @@ public class TwilioOtpService {
             return false;
         }
 
+        // Normalize phone number to ensure consistency
+        String normalizedNumber = PhoneNumberUtil.normalize(phoneNumber);
+        logger.debug("Verifying OTP for normalized phone number: {} (original: {})", normalizedNumber, phoneNumber);
+
         // Test numbers bypass for development
-        if (TEST_NUMBERS.contains(phoneNumber)) {
-            logger.debug("Test number detected, bypassing OTP verification: {}", phoneNumber);
+        if (TEST_NUMBERS.contains(normalizedNumber)) {
+            logger.debug("Test number detected, bypassing OTP verification: {}", normalizedNumber);
             return true;
         }
 
-        OtpEntry entry = otpStore.get(phoneNumber);
+        OtpEntry entry = otpStore.get(normalizedNumber);
 
         if (entry == null) {
-            logger.warn("No OTP found for phone number: {}", phoneNumber);
+            logger.warn("No OTP found for phone number: {} (normalized: {}). OTP may have expired or already been used.", 
+                       phoneNumber, normalizedNumber);
+            logger.debug("Current OTP store keys: {}", otpStore.keySet());
+            return false;
+        }
+
+        // Check if OTP was already used (for idempotency)
+        if (entry.isUsed()) {
+            logger.warn("OTP already used for phone number: {}. Preventing duplicate verification.", normalizedNumber);
             return false;
         }
 
         // Check if OTP is expired
         if (entry.isExpired()) {
-            logger.warn("OTP expired for phone number: {}", phoneNumber);
-            otpStore.remove(phoneNumber);
+            logger.warn("OTP expired for phone number: {}", normalizedNumber);
+            otpStore.remove(normalizedNumber);
             return false;
         }
 
         boolean isValid = entry.getOtp().equals(otp);
         
-        // Clear OTP immediately after verification attempt
         if (isValid) {
-            otpStore.remove(phoneNumber);
-            logger.info("OTP verified successfully for phone number: {}", phoneNumber);
+            // Mark as used but keep in store briefly to handle duplicate requests
+            entry.markAsUsed();
+            logger.info("OTP verified successfully for phone number: {}. Marked as used.", normalizedNumber);
+            
+            // Remove after a short delay (will be cleaned up by scheduled task)
+            // This prevents duplicate verification within the same second
         } else {
-            logger.warn("Invalid OTP provided for phone number: {}", phoneNumber);
+            logger.warn("Invalid OTP provided for phone number: {} (expected: {}, got: {})", 
+                       normalizedNumber, entry.getOtp(), otp);
         }
 
         return isValid;
@@ -143,22 +174,32 @@ public class TwilioOtpService {
 
     public void clearOtp(String phoneNumber) {
         if (phoneNumber != null) {
-            otpStore.remove(phoneNumber);
-            logger.debug("OTP cleared for phone number: {}", phoneNumber);
+            String normalizedNumber = PhoneNumberUtil.normalize(phoneNumber);
+            otpStore.remove(normalizedNumber);
+            logger.debug("OTP cleared for phone number: {}", normalizedNumber);
         }
     }
 
     @Scheduled(fixedRate = 60000) // Run every minute
     public void cleanExpiredOtps() {
         int removedCount = 0;
+        long now = Instant.now().toEpochMilli();
+        
         for (var entry : otpStore.entrySet()) {
-            if (entry.getValue().isExpired()) {
+            OtpEntry otpEntry = entry.getValue();
+            
+            // Remove if expired OR if used and older than 10 seconds
+            boolean shouldRemove = otpEntry.isExpired() || 
+                                  (otpEntry.isUsed() && (now - otpEntry.creationTime) > 10000);
+            
+            if (shouldRemove) {
                 otpStore.remove(entry.getKey());
                 removedCount++;
             }
         }
+        
         if (removedCount > 0) {
-            logger.info("Cleaned {} expired OTP(s)", removedCount);
+            logger.info("Cleaned {} expired/used OTP(s)", removedCount);
         }
     }
 
@@ -169,10 +210,10 @@ public class TwilioOtpService {
         }
 
         try {
-            String recipient = toPhoneNumber.startsWith("+") ? toPhoneNumber : "+91" + toPhoneNumber;
+            String twilioFormattedNumber = PhoneNumberUtil.formatForTwilio(toPhoneNumber);
 
             Call call = Call.creator(
-                            new PhoneNumber(recipient),
+                            new PhoneNumber(twilioFormattedNumber),
                             new PhoneNumber(twilioProperties.getPhoneNumber()),
                             new com.twilio.type.Twiml("<Response><Say>Hello, this is a test call from AgriConnect!</Say></Response>"))
                     .create();

@@ -136,7 +136,7 @@ public class AuthService {
             this.saveSessionId(userDetails.getUsername(), sessionId);
 
             Cookie jwtCookie = new Cookie("jwt_token", token);
-            jwtCookie.setHttpOnly(true); // Changed to true for security
+            jwtCookie.setHttpOnly(false); // Changed to true for security
             jwtCookie.setSecure(false); // Set to true in production with HTTPS
             jwtCookie.setPath("/");
             jwtCookie.setMaxAge((int) (jwtExpiration / 1000)); // Convert to seconds
