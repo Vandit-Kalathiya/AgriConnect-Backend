@@ -11,6 +11,7 @@
 .env.test
 .env.production
 .env.*.local
+.env.docker.example
 
 # Service-specific env files (explicit paths)
 Main-Backend/.env
