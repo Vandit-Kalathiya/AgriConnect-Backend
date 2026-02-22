@@ -1,0 +1,28 @@
+# ─────────────────────────────────────────────────────────────────────
+# Spring profile: test  (activated by SPRING_PROFILES_ACTIVE=test in CI)
+# ─────────────────────────────────────────────────────────────────────
+
+server:
+  port: 0
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

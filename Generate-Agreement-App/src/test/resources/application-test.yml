@@ -1,0 +1,42 @@
+# ─────────────────────────────────────────────────────────────────────
+# Spring profile: test  (activated by SPRING_PROFILES_ACTIVE=test in CI)
+# ─────────────────────────────────────────────────────────────────────
+
+server:
+  port: 0
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+  # Stub SMTP — the JavaMailSender bean initialises without connecting to Gmail
+  mail:
+    host: localhost
+    port: 1025
+    username: ci-test@localhost
+    password: ci-test-password
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+# Google Maps key is a plain @Value — any non-blank string is fine for tests
+google:
+  maps:
+    api-key: ci_dummy_maps_key
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

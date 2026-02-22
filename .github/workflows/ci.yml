@@ -1,0 +1,213 @@
+# ============================================================
+#  AgriConnect — CI Pipeline
+#  Trigger : push → main  |  pull_request → main  |  manual
+#
+#  Jobs
+#  ────
+#  1. build   Compile and package every microservice in parallel
+#             (tests are skipped — no real tests exist yet).
+#             Fails the pipeline if any service doesn't compile.
+#
+#  2. docker-build-push  Build each service's Docker image with
+#                        Buildx layer-caching and push three tags
+#                        to Docker Hub:
+#                          • latest
+#                          • sha-<short-sha>
+#                          • build-<run-number>
+#                        Runs only on direct push to main (not PRs).
+#
+#  3. pipeline-summary   Writes a Markdown summary to the Actions
+#                        run page.
+#
+#  Required GitHub Secrets
+#  ───────────────────────
+#  DOCKER_USERNAME   Docker Hub username
+#  DOCKER_PASSWORD   Docker Hub access token
+#                    (hub.docker.com → Account Settings → Security)
+# ============================================================
+
+name: CI — Build · Package · Push to Docker Hub
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Cancel any in-flight run on the same ref when a new commit arrives.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # ──────────────────────────────────────────────────────────────────
+  # JOB 1 · Build & Package
+  # All six microservices are compiled and packaged in parallel.
+  # Tests are skipped (-DskipTests) since no real tests exist yet.
+  # Add tests later and remove -DskipTests when ready.
+  # ──────────────────────────────────────────────────────────────────
+  build:
+    name: "Build · ${{ matrix.service }}"
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false   # if one service fails to compile, others still run
+      matrix:
+        include:
+          - service: Eureka-Main-Server
+            java: "23"
+
+          - service: Main-Backend
+            java: "23"
+
+          - service: Contract-Farming-App
+            java: "21"
+
+          - service: Market-Access-App
+            java: "24"
+
+          - service: Generate-Agreement-App
+            java: "21"
+
+          - service: Api-Gateway
+            java: "21"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java }} (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: temurin
+          cache: maven
+
+      - name: Compile & Package (skip tests)
+        working-directory: ${{ matrix.service }}
+        run: mvn package -DskipTests --batch-mode --no-transfer-progress
+
+
+  # ──────────────────────────────────────────────────────────────────
+  # JOB 2 · Docker Build & Push to Docker Hub
+  # Runs only on direct push to main (not on PRs).
+  # Each service gets three tags:
+  #   latest         → always points to the newest main build
+  #   sha-<short>    → pinnable, immutable reference to this commit
+  #   build-<number> → monotonically increasing build counter
+  # GHA layer cache is scoped per service so builds stay fast.
+  # ──────────────────────────────────────────────────────────────────
+  docker-build-push:
+    name: "Docker Push · ${{ matrix.service }}"
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: Eureka-Main-Server
+            image: agriconnect-eureka-server
+
+          - service: Main-Backend
+            image: agriconnect-main-backend
+
+          - service: Contract-Farming-App
+            image: agriconnect-contract-farming
+
+          - service: Market-Access-App
+            image: agriconnect-market-access
+
+          - service: Generate-Agreement-App
+            image: agriconnect-generate-agreement
+
+          - service: Api-Gateway
+            image: agriconnect-api-gateway
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
+            type=raw,value=build-${{ github.run_number }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.image }}
+            org.opencontainers.image.description=AgriConnect ${{ matrix.service }} microservice
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Write image summary
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "### Image pushed: \`${{ secrets.DOCKER_USERNAME }}/${{ matrix.image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag | Full reference |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|----------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`latest\` | \`${{ secrets.DOCKER_USERNAME }}/${{ matrix.image }}:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`sha-${SHORT_SHA}\` | \`${{ secrets.DOCKER_USERNAME }}/${{ matrix.image }}:sha-${SHORT_SHA}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`build-${{ github.run_number }}\` | \`${{ secrets.DOCKER_USERNAME }}/${{ matrix.image }}:build-${{ github.run_number }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| digest | \`${{ steps.build.outputs.digest }}\` |" >> $GITHUB_STEP_SUMMARY
+
+
+  # ──────────────────────────────────────────────────────────────────
+  # JOB 3 · Pipeline Summary
+  # ──────────────────────────────────────────────────────────────────
+  pipeline-summary:
+    name: "Pipeline Summary"
+    runs-on: ubuntu-latest
+    needs: [ build, docker-build-push ]
+    if: always()
+
+    steps:
+      - name: Write pipeline summary
+        run: |
+          BUILD_RESULT="${{ needs.build.result }}"
+          DOCKER_RESULT="${{ needs.docker-build-push.result }}"
+
+          icon() { [[ "$1" == "success" ]] && echo "✅ Passed" || [[ "$1" == "failure" ]] && echo "❌ Failed" || echo "⏭️ Skipped"; }
+
+          echo "## AgriConnect CI Pipeline" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Build & Package (all 6 services) | $(icon $BUILD_RESULT) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build & Push | $(icon $DOCKER_RESULT) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Actor:** @${{ github.actor }} &nbsp;|&nbsp; **Branch:** \`${{ github.ref_name }}\` &nbsp;|&nbsp; **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if build stage failed
+        if: needs.build.result == 'failure'
+        run: |
+          echo "Build stage failed. Fix compilation errors before merging."
+          exit 1

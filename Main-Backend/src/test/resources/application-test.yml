@@ -1,0 +1,58 @@
+# ─────────────────────────────────────────────────────────────────────
+# Spring profile: test
+# Activated automatically when SPRING_PROFILES_ACTIVE=test (set by CI).
+# Overrides only the properties needed for isolated unit-test execution.
+#
+# Third-party credentials (Twilio, JWT) are set to non-blank dummy
+# strings. The @NotBlank validation on @ConfigurationProperties only
+# requires the value to be present — it never calls the external API
+# during a contextLoads() test.
+# ─────────────────────────────────────────────────────────────────────
+
+server:
+  port: 0   # random port — avoids collisions when matrix jobs run in parallel
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+  # Stub SMTP so the mail bean initialises without connecting to Gmail
+  mail:
+    host: localhost
+    port: 1025
+    username: ci-test@localhost
+    password: ci-test-password
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+# ── Twilio ─────────────────────────────────────────────────────────
+# @NotBlank requires non-blank values; Twilio.init() only stores them
+# locally and does NOT call the Twilio API on startup.
+twilio:
+  account-sid: ci_dummy_sid
+  auth-token: ci_dummy_token
+  phone-number: "+10000000000"
+
+# ── JWT ────────────────────────────────────────────────────────────
+jwt:
+  secret: "Y2lfdGVzdF9zZWNyZXRfa2V5X2Zvcl91bml0X3Rlc3Rpbmdfb25seV8zMmNoYXJz"
+  expiration: 3600000
+
+# ── Eureka (fully disabled) ────────────────────────────────────────
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

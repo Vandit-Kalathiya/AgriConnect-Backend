@@ -1,0 +1,22 @@
+# ─────────────────────────────────────────────────────────────────────
+# Spring profile: test  (activated by SPRING_PROFILES_ACTIVE=test in CI)
+# ─────────────────────────────────────────────────────────────────────
+
+server:
+  port: 0
+
+# Run Eureka in standalone mode (no peers) during tests
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://localhost:${server.port}/eureka/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
