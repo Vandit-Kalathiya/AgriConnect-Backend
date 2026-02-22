@@ -1,0 +1,188 @@
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: agriconnect-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: agri-connect
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - agriconnect
+
+  eureka-server:
+    build:
+      context: ./Eureka-Main-Server
+      dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/agriconnect-eureka-server:${TAG:-latest}
+    container_name: agriconnect-eureka-server
+    restart: unless-stopped
+    ports:
+      - "8761:8761"
+    environment:
+      PORT: 8761
+      SPRING_PROFILES_ACTIVE: prod
+      EUREKA_HOSTNAME: eureka-server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    networks:
+      - agriconnect
+
+  main-backend:
+    build:
+      context: ./Main-Backend
+      dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/agriconnect-main-backend:${TAG:-latest}
+    container_name: agriconnect-main-backend
+    restart: unless-stopped
+    ports:
+      - "2525:2525"
+    env_file: ./Main-Backend/.env
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/agri-connect?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      GATEWAY_URL: ${GATEWAY_URL:-http://localhost:8080}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2525/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - agriconnect
+
+  contract-farming:
+    build:
+      context: ./Contract-Farming-App
+      dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/agriconnect-contract-farming:${TAG:-latest}
+    container_name: agriconnect-contract-farming
+    restart: unless-stopped
+    ports:
+      - "2526:2526"
+    env_file: ./Contract-Farming-App/.env
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/agri-connect?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      GATEWAY_URL: ${GATEWAY_URL:-http://localhost:8080}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2526/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - agriconnect
+
+  market-access:
+    build:
+      context: ./Market-Access-App
+      dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/agriconnect-market-access:${TAG:-latest}
+    container_name: agriconnect-market-access
+    restart: unless-stopped
+    ports:
+      - "2527:2527"
+    env_file: ./Market-Access-App/.env
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/agri-connect?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      GATEWAY_URL: ${GATEWAY_URL:-http://localhost:8080}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2527/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - agriconnect
+
+  generate-agreement:
+    build:
+      context: ./Generate-Agreement-App
+      dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/agriconnect-generate-agreement:${TAG:-latest}
+    container_name: agriconnect-generate-agreement
+    restart: unless-stopped
+    ports:
+      - "2529:2529"
+    env_file: ./Generate-Agreement-App/.env
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/agri-connect?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      GATEWAY_URL: ${GATEWAY_URL:-http://localhost:8080}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2529/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - agriconnect
+
+  api-gateway:
+    build:
+      context: ./Api-Gateway
+      dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/agriconnect-api-gateway:${TAG:-latest}
+    container_name: agriconnect-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      SPRING_PROFILES_ACTIVE: prod
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - agriconnect
+
+volumes:
+  mysql-data:
+    driver: local
+
+networks:
+  agriconnect:
+    driver: bridge

@@ -97,4 +97,13 @@ management:
       prometheus:
         enabled: true
 
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    try-it-out-enabled: true
+    tags-sorter: alpha
+    operations-sorter: alpha
+
 

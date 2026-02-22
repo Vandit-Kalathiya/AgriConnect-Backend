@@ -1,0 +1,214 @@
+spring:
+  application:
+    name: Api-Gateway
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  cloud:
+    gateway:
+      # ── Centralized CORS ──────────────────────────────────────────────────
+      # Applied to every route — individual services no longer need to handle CORS
+      # for requests that come through the gateway.
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:5173"
+              - "http://localhost:5174"
+              - "http://localhost:5000"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            allowCredentials: true
+            maxAge: 3600
+
+      # ── Routes ────────────────────────────────────────────────────────────
+      # All routes use lb:// (Eureka load-balanced) URIs so no IPs are
+      # hardcoded. The service names must match spring.application.name in
+      # each downstream service.
+      #
+      # StripPrefix=1 removes the service prefix before forwarding, so:
+      #   /main/auth/login  →  Main-Backend:/auth/login
+      #
+      # Circuit breakers forward to /fallback/* when a service is down or
+      # when the timelimiter threshold is exceeded.
+      routes:
+        - id: main-backend
+          uri: lb://Main-Backend
+          predicates:
+            - Path=/main/**
+          filters:
+            - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: mainBackend
+                fallbackUri: forward:/fallback/main
+
+        - id: contract-farming
+          uri: lb://Contract-Farming-App
+          predicates:
+            - Path=/contract-farming/**
+          filters:
+            - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: contractFarming
+                fallbackUri: forward:/fallback/contract-farming
+
+        - id: market-access
+          uri: lb://Market-Access-App
+          predicates:
+            - Path=/market/**
+          filters:
+            - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: marketAccess
+                fallbackUri: forward:/fallback/market
+
+        - id: generate-agreement
+          uri: lb://Generate-Agreement-App
+          predicates:
+            - Path=/agreement/**
+          filters:
+            - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: generateAgreement
+                fallbackUri: forward:/fallback/agreement
+
+      # Deduplicate CORS headers that are added by both the gateway (globalcors)
+      # and the individual downstream services (their own Security configs).
+      # Without this, the browser sees the header twice and blocks the request.
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+
+      # Disable auto-discovery-based routes; we use explicit routes above.
+      discovery:
+        locator:
+          enabled: false
+
+# ── Server ──────────────────────────────────────────────────────────────────
+server:
+  port: ${PORT:8080}
+  compression:
+    enabled: true
+
+# ── Eureka ──────────────────────────────────────────────────────────────────
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 30
+  instance:
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+
+# ── Circuit Breaker (Resilience4j) ──────────────────────────────────────────
+resilience4j:
+  circuitbreaker:
+    instances:
+      mainBackend:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 15s
+        failureRateThreshold: 50
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      contractFarming:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 15s
+        failureRateThreshold: 50
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      marketAccess:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 15s
+        failureRateThreshold: 50
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      generateAgreement:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 15s
+        failureRateThreshold: 50
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+  timelimiter:
+    instances:
+      mainBackend:
+        timeoutDuration: 10s
+      contractFarming:
+        timeoutDuration: 10s
+      marketAccess:
+        timeoutDuration: 10s
+      generateAgreement:
+        timeoutDuration: 10s
+
+# ── Swagger / OpenAPI ────────────────────────────────────────────────────────
+# The gateway hosts a single Swagger UI that aggregates docs from all services.
+# Each URL below routes through the gateway's own route table to the downstream
+# service's /v3/api-docs endpoint — no extra configuration needed.
+#
+# Access at: http://localhost:8080/swagger-ui.html
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    try-it-out-enabled: true
+    tags-sorter: alpha
+    operations-sorter: alpha
+    urls:
+      - name: "Main Backend (Auth & Users)"
+        url: /main/v3/api-docs
+      - name: "Contract Farming (Agreements, Orders, Payments)"
+        url: /contract-farming/v3/api-docs
+      - name: "Market Access (Listings & Images)"
+        url: /market/v3/api-docs
+      - name: "Agreement Generator (Contracts & Cold Storage)"
+        url: /agreement/v3/api-docs
+  api-docs:
+    path: /v3/api-docs
+
+# ── Actuator ────────────────────────────────────────────────────────────────
+# /actuator/gateway/routes shows all live routes and their status.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.agriconnect.gateway: ${LOG_LEVEL_APP:DEBUG}
+    org.springframework.cloud.gateway: ${LOG_LEVEL_GATEWAY:INFO}
+    io.github.resilience4j: ${LOG_LEVEL_RESILIENCE4J:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${LOG_FILE:logs/api-gateway.log}
+    max-size: ${LOG_FILE_MAX_SIZE:10MB}
+    max-history: ${LOG_FILE_MAX_HISTORY:30}

@@ -2,21 +2,16 @@ package com.agriconnect.Contract.Farming.App.BlockChainConfig;
 
 //import com.agriconnect.Contract.Farming.App.AgreementRegistry.AgreementRegistry;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.web3j.crypto.Credentials;
-import org.web3j.protocol.Web3j;
-import org.web3j.protocol.http.HttpService;
-import org.web3j.tx.gas.ContractGasProvider;
-import org.web3j.tx.gas.StaticGasProvider;
 
-import java.math.BigInteger;
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -28,18 +23,14 @@ public class BlockChainConfig {
 
     private static final String CONTRACT_ADDRESS = System.getProperty("CONTRACT_ADDRESS");
 
+    @Value("${cors.allowed.origins:http://localhost:5000,http://localhost:5173,http://localhost:5174}")
+    private String allowedOrigins;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable);
-
-        // Enable CORS
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
-
-        http.authorizeHttpRequests(authorize -> {
-            authorize.anyRequest().permitAll();
-        });
-
+        http.authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll());
         return http.build();
     }
 
@@ -74,10 +65,11 @@ public class BlockChainConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:5000","http://localhost:5174")); // Frontend URL
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
+        configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
