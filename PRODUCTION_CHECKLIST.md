@@ -1,5 +1,7 @@
 # Production Deployment Checklist
 
+> **Last updated:** February 2026 — includes API Gateway, Swagger UI, and circuit breaker items.
+
 ## Pre-Deployment Security
 
 ### Environment Variables
@@ -11,7 +13,8 @@
 - [ ] Google Maps API key has production restrictions
 - [ ] Email password is using app-specific password (not main password)
 - [ ] Blockchain private keys are secured (consider using KMS)
-- [ ] No `.env` files are committed to Git (verify .gitignore)
+- [ ] No `.env` files are committed to Git (verify with `git ls-files | grep .env`)
+- [ ] `GATEWAY_URL` is set to the production public URL (e.g. `https://api.yourdomain.com`) in root `.env` and all service environments
 
 ### Database Configuration
 - [ ] Database is set up with proper user permissions
@@ -59,11 +62,22 @@
 
 ### Server Configuration
 - [ ] Firewall rules are configured (allow only necessary ports)
-- [ ] Ports 2525-2529 and 8761 are properly secured
+- [ ] **Only port 8080 (gateway) is publicly exposed** — all other service ports are internal only
+- [ ] Ports 2525, 2526, 2527, 2529, 8761 are blocked from external access
 - [ ] SSH access is secured (key-based authentication, no root login)
 - [ ] Server has adequate resources (CPU, RAM, Disk)
 - [ ] Swap space is configured
 - [ ] Disk space monitoring is set up
+
+### API Gateway
+- [ ] Api-Gateway service is running and healthy (`/actuator/health`)
+- [ ] All 4 routes are active (`/actuator/gateway/routes`)
+- [ ] `GATEWAY_URL` env variable points to the public-facing gateway URL
+- [ ] Gateway port (8080) is the **only** backend port exposed to the public internet
+- [ ] Service ports (2525, 2526, 2527, 2529, 8761) are firewall-blocked from external access
+- [ ] Circuit breaker thresholds are tuned for production load
+- [ ] `DedupeResponseHeader` filter is in `default-filters` (prevents duplicate CORS headers)
+- [ ] Swagger UI is either disabled or access-restricted in production (`springdoc.swagger-ui.enabled=false`)
 
 ### Eureka Server
 - [ ] Eureka server is running and accessible
@@ -222,12 +236,14 @@
 
 ### Smoke Testing
 - [ ] All services are running
-- [ ] All services are registered with Eureka
-- [ ] Health check endpoints return healthy status
-- [ ] Sample API requests succeed
+- [ ] All services are registered with Eureka (`http://gateway:8080/actuator/gateway/routes`)
+- [ ] Gateway health check returns UP (`/actuator/health`)
+- [ ] All 4 gateway routes are active
+- [ ] Sample API requests through the gateway succeed (`/main/auth/login`, `/market/listings/all/active`)
 - [ ] User can register successfully
 - [ ] User can login successfully
 - [ ] Critical features work end-to-end
+- [ ] Circuit breaker fallback returns 503 JSON when a service is stopped (spot check)
 
 ### Monitoring Setup
 - [ ] Monitoring dashboards are set up

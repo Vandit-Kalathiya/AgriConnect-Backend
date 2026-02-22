@@ -1,14 +1,20 @@
 # Quick Start Guide
 
-This guide will help you get the AgriConnect backend up and running in under 10 minutes.
+Get the AgriConnect backend up and running in minutes.
+
+---
 
 ## Prerequisites
 
-Ensure you have the following installed:
-- **Java 21+** - [Download](https://adoptium.net/)
-- **MySQL 8.0+** - [Download](https://dev.mysql.com/downloads/)
-- **Maven 3.8+** - [Download](https://maven.apache.org/download.cgi)
-- **Git** - [Download](https://git-scm.com/downloads)
+**Option A — Docker (Recommended, easiest)**
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+**Option B — Local Maven**
+- [Java 21+](https://adoptium.net/)
+- [MySQL 8.0+](https://dev.mysql.com/downloads/)
+- [Maven 3.8+](https://maven.apache.org/download.cgi)
+
+---
 
 ## Step 1: Clone the Repository
 
@@ -17,239 +23,190 @@ git clone <your-repo-url>
 cd Backend
 ```
 
-## Step 2: Set Up Database
+---
 
-1. Start MySQL server
-2. Create database:
+## Step 2: Configure Environment Variables
 
-```sql
-CREATE DATABASE IF NOT EXISTS `agri-connect`;
+### Root `.env` (required for Docker Compose)
+
+The root `.env` file already exists. Verify it has:
+
+```properties
+DOCKER_USERNAME=your_dockerhub_username
+MYSQL_ROOT_PASSWORD=your_secure_mysql_password
+TAG=latest
+
+# Public URL of the API Gateway (used in Swagger UI "Try it out")
+GATEWAY_URL=http://localhost:8080
 ```
 
-3. Verify connection:
+### Per-service `.env` files
+
+Copy the example file for each service and fill in your values:
 
 ```bash
-mysql -u root -p agri-connect
-```
+# Windows (PowerShell)
+Copy-Item Main-Backend\.env.example           Main-Backend\.env
+Copy-Item Contract-Farming-App\.env.example   Contract-Farming-App\.env
+Copy-Item Market-Access-App\.env.example      Market-Access-App\.env
+Copy-Item Generate-Agreement-App\.env.example Generate-Agreement-App\.env
 
-## Step 3: Configure Environment Variables
-
-### Quick Setup (Development)
-
-For each service, copy the example file and update values:
-
-```bash
-# Main-Backend
-cp Main-Backend/.env.example Main-Backend/.env
-
-# Contract-Farming-App
-cp Contract-Farming-App/.env.example Contract-Farming-App/.env
-
-# Generate-Agreement-App
+# macOS / Linux
+cp Main-Backend/.env.example           Main-Backend/.env
+cp Contract-Farming-App/.env.example   Contract-Farming-App/.env
+cp Market-Access-App/.env.example      Market-Access-App/.env
 cp Generate-Agreement-App/.env.example Generate-Agreement-App/.env
-
-# Market-Access-App
-cp Market-Access-App/.env.example Market-Access-App/.env
-
-# Eureka-Main-Server
-cp Eureka-Main-Server/.env.example Eureka-Main-Server/.env
 ```
 
-### Minimal Configuration
+**Minimum values to set in each `.env`:**
 
-Edit each `.env` file with at least these values:
+| File | Required keys |
+|------|--------------|
+| `Main-Backend/.env` | `DB_PASSWORD`, `JWT_SECRET`, `TWILIO_*` |
+| `Contract-Farming-App/.env` | `DB_PASSWORD`, `RAZORPAY_*` |
+| `Market-Access-App/.env` | `DB_PASSWORD` |
+| `Generate-Agreement-App/.env` | `DB_PASSWORD`, `MAIL_USERNAME`, `MAIL_PASS`, `GOOGLE_MAP_API_KEY` |
 
-**Main-Backend/.env:**
-```properties
-DB_URL=jdbc:mysql://localhost:3306/agri-connect?createDatabaseIfNotExist=true
-DB_USERNAME=root
-DB_PASSWORD=your_mysql_password
-PORT=2525
-JWT_SECRET=your_secret_key_minimum_256_bits_long_for_security
-TWILIO_ACCOUNT_SID=your_twilio_sid_or_skip_for_test_numbers
-TWILIO_AUTH_TOKEN=your_twilio_token_or_skip_for_test_numbers
-TWILIO_PHONE_NUMBER=your_twilio_number_or_skip_for_test_numbers
-```
+---
 
-**Contract-Farming-App/.env:**
-```properties
-DB_URL=jdbc:mysql://localhost:3306/agri-connect?createDatabaseIfNotExist=true
-DB_USERNAME=root
-DB_PASSWORD=your_mysql_password
-PORT=2526
-RAZORPAY_KEY_ID=your_razorpay_key_or_dummy_value
-RAZORPAY_KEY_SECRET=your_razorpay_secret_or_dummy_value
-CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000
-PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000000
-API_URL=http://localhost:8545
-```
+## Step 3: Start the Stack
 
-**Generate-Agreement-App/.env:**
-```properties
-DB_URL=jdbc:mysql://localhost:3306/agri-connect?createDatabaseIfNotExist=true
-DB_USERNAME=root
-DB_PASSWORD=your_mysql_password
-PORT=2529
-MAIL_USERNAME=your_email@gmail.com
-MAIL_PASS=your_app_password
-GOOGLE_MAP_API_KEY=your_google_maps_key_or_dummy
-```
-
-**Market-Access-App/.env:**
-```properties
-DB_URL=jdbc:mysql://localhost:3306/agri-connect?createDatabaseIfNotExist=true
-DB_USERNAME=root
-DB_PASSWORD=your_mysql_password
-PORT=2527
-```
-
-**Eureka-Main-Server/.env:**
-```properties
-PORT=8761
-SPRING_PROFILES_ACTIVE=dev
-```
-
-## Step 4: Build All Services
+### Option A — Docker Compose (Recommended)
 
 ```bash
-mvn clean install
+docker compose up -d
 ```
 
-This will:
-- Download all dependencies
-- Compile all services
-- Run tests
-- Create executable JARs
+This starts all 6 services in the correct order automatically:
 
-## Step 5: Start Services
+```
+MySQL → Eureka → [Main-Backend, Contract-Farming, Market-Access, Generate-Agreement] → Api-Gateway
+```
 
-### Option A: Using Maven (Recommended for Development)
+Watch startup progress:
+```bash
+docker compose logs -f
+```
 
-Open 5 separate terminals and run:
+Wait until you see all services show `Started ... in ... seconds` in the logs (~60–90 seconds total).
 
-**Terminal 1 - Eureka Server (Start First!)**
+### Option B — Local Maven (6 terminals)
+
+Open 6 terminals and run each command, **waiting for each step** before the next:
+
+**Terminal 1 — Eureka (start first, wait for it)**
 ```bash
 cd Eureka-Main-Server
 mvn spring-boot:run
 ```
+Wait until you see `Started EurekaMainServerApplication` then continue.
 
-Wait for Eureka to fully start (check http://localhost:8761), then start others:
-
-**Terminal 2 - Main Backend**
+**Terminals 2–5 — Business services (start in any order)**
 ```bash
-cd Main-Backend
+cd Main-Backend           && mvn spring-boot:run   # Terminal 2
+cd Contract-Farming-App   && mvn spring-boot:run   # Terminal 3
+cd Market-Access-App      && mvn spring-boot:run   # Terminal 4
+cd Generate-Agreement-App && mvn spring-boot:run   # Terminal 5
+```
+
+**Terminal 6 — API Gateway (start last)**
+```bash
+cd Api-Gateway
 mvn spring-boot:run
 ```
 
-**Terminal 3 - Contract Farming**
+---
+
+## Step 4: Verify Everything is Running
+
+### 1. Eureka Dashboard — all services must be registered
+Open: **http://localhost:8761**
+
+You should see 5 services registered:
+- `API-GATEWAY`
+- `MAIN-BACKEND`
+- `CONTRACT-FARMING-APP`
+- `MARKET-ACCESS-APP`
+- `GENERATE-AGREEMENT-APP`
+
+### 2. Gateway health check
 ```bash
-cd Contract-Farming-App
-mvn spring-boot:run
+curl http://localhost:8080/actuator/health
+# Expected: {"status":"UP"}
 ```
 
-**Terminal 4 - Market Access**
+### 3. Live gateway routes
 ```bash
-cd Market-Access-App
-mvn spring-boot:run
+curl http://localhost:8080/actuator/gateway/routes
+# Shows all 4 active routes with their URIs and filters
 ```
 
-**Terminal 5 - Generate Agreement**
-```bash
-cd Generate-Agreement-App
-mvn spring-boot:run
-```
+### 4. Swagger UI
+Open: **http://localhost:8080/swagger-ui.html**
 
-### Option B: Using JAR Files
+Use the dropdown (top-right) to switch between services:
+- Main Backend (Auth & Users)
+- Contract Farming (Agreements, Orders, Payments)
+- Market Access (Listings & Images)
+- Agreement Generator (Contracts & Cold Storage)
 
-After building, you can run JARs directly:
+---
 
-```bash
-# Terminal 1
-java -jar Eureka-Main-Server/target/Eureka-Main-Server-0.0.1-SNAPSHOT.jar
+## Step 5: Test the API
 
-# Terminal 2
-java -jar Main-Backend/target/Main-Backend-0.0.1-SNAPSHOT.jar
+All requests go through **port 8080** (the API Gateway). The gateway prefixes route to each service:
 
-# Terminal 3
-java -jar Contract-Farming-App/target/Contract-Farming-App-0.0.1-SNAPSHOT.jar
+| Service | Gateway prefix |
+|---------|--------------|
+| Main Backend | `http://localhost:8080/main` |
+| Contract Farming | `http://localhost:8080/contract-farming` |
+| Market Access | `http://localhost:8080/market` |
+| Generate Agreement | `http://localhost:8080/agreement` |
 
-# Terminal 4
-java -jar Market-Access-App/target/Market-Access-App-0.0.1-SNAPSHOT.jar
-
-# Terminal 5
-java -jar Generate-Agreement-App/target/Generate-Agreement-App-0.0.1-SNAPSHOT.jar
-```
-
-## Step 6: Verify Services
-
-### Check Eureka Dashboard
-Open browser: http://localhost:8761
-
-You should see all 4 services registered:
-- MAIN-BACKEND
-- CONTRACT-FARMING-APP
-- MARKET-ACCESS-APP
-- GENERATE-AGREEMENT-APP
-
-### Check Health Endpoints
+### Register a new user
 
 ```bash
-curl http://localhost:2525/actuator/health  # Main-Backend
-curl http://localhost:2526/actuator/health  # Contract-Farming-App
-curl http://localhost:2527/actuator/health  # Market-Access-App
-curl http://localhost:2529/actuator/health  # Generate-Agreement-App
-```
-
-All should return: `{"status":"UP"}`
-
-## Step 7: Test API Endpoints
-
-### Register a User
-
-```bash
-curl -X POST http://localhost:2525/auth/register \
+curl -X POST http://localhost:8080/main/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "username": "John Doe",
     "phoneNumber": "9876543210",
-    "address": "123 Farm Road, Village, District, State"
+    "address": "123 Farm Road, Village"
   }'
 ```
 
-**Response:** `{"message":"OTP sent successfully"}`
+Expected: `{"message":"OTP sent successfully"}`
 
-**Note:** For testing without Twilio, use test numbers: `8780850751` or `9924111980`
+> For testing without Twilio, use test numbers: `8780850751` or `9924111980`
 
-### Verify OTP and Register
+### Verify OTP and complete registration
 
 ```bash
-curl -X POST http://localhost:2525/auth/r/verify-otp/9876543210/123456 \
+curl -X POST http://localhost:8080/main/auth/r/verify-otp/9876543210/123456 \
   -H "Content-Type: application/json" \
   -d '{
     "username": "John Doe",
     "phoneNumber": "9876543210",
-    "address": "123 Farm Road, Village, District, State"
+    "address": "123 Farm Road, Village"
   }'
 ```
 
 ### Login
 
 ```bash
-curl -X POST http://localhost:2525/auth/login \
+curl -X POST http://localhost:8080/main/auth/login \
   -H "Content-Type: application/json" \
-  -d '{
-    "phoneNumber": "9876543210"
-  }'
+  -d '{"phoneNumber": "9876543210"}'
 ```
 
-### Verify OTP and Get JWT Token
+### Verify OTP and get JWT token
 
 ```bash
-curl -X POST http://localhost:2525/auth/verify-otp/9876543210/123456 \
+curl -X POST http://localhost:8080/main/auth/verify-otp/9876543210/123456 \
   -c cookies.txt
 ```
 
-**Response:**
+Expected response:
 ```json
 {
   "jwtToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -257,120 +214,105 @@ curl -X POST http://localhost:2525/auth/verify-otp/9876543210/123456 \
 }
 ```
 
-### Get Current User (Authenticated)
+### Get all active marketplace listings
 
 ```bash
-curl -X GET http://localhost:2525/auth/current-user \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+curl http://localhost:8080/market/listings/all/active
 ```
-
-## Common Issues & Solutions
-
-### Issue: "Communications link failure"
-**Solution:** Ensure MySQL is running and credentials in .env are correct
-
-```bash
-# Check MySQL status
-systemctl status mysql  # Linux
-brew services list      # macOS
-net start MySQL         # Windows
-```
-
-### Issue: Service not registering with Eureka
-**Solution:** 
-1. Ensure Eureka server is running first
-2. Check EUREKA_SERVER_URL in .env
-3. Wait 30 seconds for registration
-
-### Issue: "Port already in use"
-**Solution:** 
-1. Check if another service is using the port
-2. Change PORT in .env file
-3. Kill the process using the port:
-
-```bash
-# Linux/Mac
-lsof -ti:2525 | xargs kill -9
-
-# Windows
-netstat -ano | findstr :2525
-taskkill /PID <PID> /F
-```
-
-### Issue: Build fails
-**Solution:**
-```bash
-# Clean and rebuild
-mvn clean install -U
-
-# Skip tests if needed
-mvn clean install -DskipTests
-```
-
-### Issue: JWT Token Invalid
-**Solution:** Ensure JWT_SECRET is same across service restarts and is at least 256 bits
-
-## Development Tips
-
-### Hot Reload
-Spring DevTools is included - changes to code will auto-reload
-
-### Debug Mode
-Add to VM arguments:
-```
--agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005
-```
-
-### View Logs
-Logs are written to:
-- Console (stdout)
-- `logs/` directory in each service folder
-
-### Database GUI
-Use tools like:
-- MySQL Workbench
-- DBeaver
-- TablePlus
-- phpMyAdmin
-
-### API Testing
-Use tools like:
-- Postman
-- Insomnia
-- cURL
-- HTTPie
-
-## Next Steps
-
-1. **Read the Documentation**
-   - `README.md` - Complete documentation
-   - `REFACTORING_SUMMARY.md` - What was refactored
-   - `PRODUCTION_CHECKLIST.md` - Production deployment guide
-
-2. **Explore the Code**
-   - Start with Controllers
-   - Then Services
-   - Then Repositories
-
-3. **Test the APIs**
-   - Import Postman collection (if available)
-   - Test all endpoints
-   - Understand the flow
-
-4. **Configure External Services** (Optional)
-   - Twilio - For real OTP
-   - Razorpay - For payments
-   - Google Maps - For location services
-
-## Support
-
-If you encounter any issues:
-1. Check the logs in `logs/` directory
-2. Verify all services are running
-3. Check database connectivity
-4. Verify environment variables
-5. Consult the troubleshooting section in README.md
 
 ---
 
-**You're all set! Happy coding! 🚀**
+## Rebuilding a Single Service
+
+When you change code in one service, rebuild only that service:
+
+```bash
+docker compose up --build --no-deps -d api-gateway
+docker compose up --build --no-deps -d main-backend
+docker compose up --build --no-deps -d contract-farming
+docker compose up --build --no-deps -d market-access
+docker compose up --build --no-deps -d generate-agreement
+```
+
+---
+
+## Useful Commands
+
+```bash
+# View logs for a specific service
+docker compose logs -f api-gateway
+docker compose logs -f main-backend
+
+# Restart a service without rebuilding
+docker compose restart contract-farming
+
+# Stop all services
+docker compose down
+
+# Stop and remove volumes (wipes database!)
+docker compose down -v
+
+# Check container status
+docker compose ps
+```
+
+---
+
+## Common Issues
+
+### Gateway returns 503
+The downstream service isn't running or hasn't registered with Eureka yet.
+```bash
+docker compose logs -f main-backend   # Check if it started
+curl http://localhost:2525/actuator/health  # Direct health check
+```
+
+### Service not visible in Eureka dashboard
+Wait 30–60 seconds — Eureka registration has a heartbeat delay. If still missing:
+```bash
+docker compose logs -f main-backend | grep -i eureka
+```
+
+### "Communications link failure" (database)
+MySQL isn't ready yet. In Docker, services have health checks so this shouldn't happen. For local dev:
+```bash
+# Windows
+net start MySQL
+
+# Linux
+sudo systemctl start mysql
+```
+
+### Swagger UI "Failed to fetch" on Try it out
+Ensure `GATEWAY_URL=http://localhost:8080` is set in the root `.env`, then rebuild the affected service:
+```bash
+docker compose up --build --no-deps -d main-backend
+```
+
+### Port already in use
+```bash
+# Windows — find the process using port 8080
+netstat -ano | findstr :8080
+taskkill /PID <PID> /F
+
+# Linux/macOS
+lsof -ti:8080 | xargs kill -9
+```
+
+### Build fails — clean and retry
+```bash
+cd Main-Backend
+mvn clean install -DskipTests
+```
+
+---
+
+## Next Steps
+
+- **[README.md](README.md)** — Full architecture and configuration reference
+- **[API_GATEWAY_FRONTEND_MIGRATION.md](API_GATEWAY_FRONTEND_MIGRATION.md)** — How to update the frontend to use the gateway
+- **[PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md)** — Pre-deployment security and infrastructure checklist
+
+---
+
+**You're all set! Open http://localhost:8080/swagger-ui.html to explore the API.**

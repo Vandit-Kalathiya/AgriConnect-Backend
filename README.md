@@ -1,378 +1,414 @@
-# AgriConnect Backend - Microservices Architecture
+# AgriConnect Backend — Microservices Architecture
 
-A production-ready microservices architecture for the AgriConnect agricultural platform, built with Spring Boot and Spring Cloud.
+A production-ready microservices backend for the AgriConnect agricultural platform, built with Spring Boot, Spring Cloud Gateway, and Eureka service discovery.
+
+---
 
 ## Architecture Overview
 
-The backend consists of 5 microservices:
+```
+                        ┌─────────────────────────────────┐
+                        │         API Gateway :8080        │
+                        │   Spring Cloud Gateway           │
+                        │   • Routing (lb:// Eureka)       │
+                        │   • Centralized CORS             │
+                        │   • Circuit Breaker              │
+                        │   • Global Logging               │
+                        │   • Unified Swagger UI           │
+                        └──────────┬──────────────────┬───┘
+               ┌───────────────────┼──────────────┐   │
+               ▼                   ▼              ▼   ▼
+        /main/**          /contract-farming/**  /market/**  /agreement/**
+               │                   │              │          │
+    ┌──────────▼──┐    ┌───────────▼──┐  ┌───────▼──┐  ┌───▼────────────┐
+    │ Main-Backend│    │Contract-Farm.│  │Market-Acc│  │Generate-Agreem.│
+    │   :2525     │    │   :2526      │  │  :2527   │  │    :2529       │
+    └─────────────┘    └──────────────┘  └──────────┘  └────────────────┘
+           │                  │                │                │
+           └──────────────────┴────────────────┴────────────────┘
+                                       │
+                          ┌────────────▼────────────┐
+                          │  Eureka-Main-Server:8761 │
+                          │     Service Registry     │
+                          └─────────────────────────┘
+```
 
-1. **Eureka-Main-Server** (Port 8761) - Service Discovery & Registry
-2. **Main-Backend** (Port 2525) - Authentication & User Management
-3. **Contract-Farming-App** (Port 2526) - Contract Farming & Blockchain
-4. **Market-Access-App** (Port 2527) - Product Listings & Marketplace
-5. **Generate-Agreement-App** (Port 2529) - Contract Generation & Email
+### Services
+
+| # | Service | Port | Responsibility |
+|---|---------|------|---------------|
+| 1 | **Api-Gateway** | **8080** | Single entry point — routing, CORS, circuit breaker, Swagger UI |
+| 2 | **Eureka-Main-Server** | 8761 | Service discovery & registry |
+| 3 | **Main-Backend** | 2525 | Authentication, JWT, OTP, user management |
+| 4 | **Contract-Farming-App** | 2526 | Farming contracts, orders, Razorpay payments, blockchain |
+| 5 | **Market-Access-App** | 2527 | Product listings, images, marketplace |
+| 6 | **Generate-Agreement-App** | 2529 | PDF contract generation, cold storage, email |
+
+> **All client traffic goes through port 8080 (the gateway). Never call service ports directly from the frontend.**
+
+---
 
 ## Technology Stack
 
-- **Framework**: Spring Boot 3.x
-- **Cloud**: Spring Cloud (Eureka, Config)
-- **Security**: Spring Security, JWT
-- **Database**: MySQL 8.0
-- **ORM**: JPA/Hibernate
-- **Build Tool**: Maven
-- **Java Version**: 21-24
-- **Additional**: Twilio SMS, Razorpay Payments, Web3j Blockchain, iTextPDF
+| Category | Technology |
+|----------|-----------|
+| Framework | Spring Boot 3.3–3.4 |
+| Gateway | Spring Cloud Gateway (WebFlux/reactive) |
+| Service Discovery | Spring Cloud Netflix Eureka |
+| Resilience | Resilience4j Circuit Breaker |
+| Security | Spring Security, JWT |
+| Database | MySQL 8.0, JPA/Hibernate |
+| API Docs | springdoc-openapi (Swagger UI) |
+| Messaging | Twilio SMS |
+| Payments | Razorpay |
+| PDF | iTextPDF 8 |
+| Blockchain | Web3j |
+| Build | Maven |
+| Java | 21–24 (per service) |
+| Containers | Docker, Docker Compose |
+
+---
 
 ## Prerequisites
 
-- Java 21 or higher
+**For Docker (recommended):**
+- Docker Desktop
+
+**For local development (manual run):**
+- Java 21+
 - MySQL 8.0+
 - Maven 3.8+
-- Git
 
-## Environment Setup
+---
 
-Each microservice requires its own `.env` file. Example templates are provided as `.env.example` files.
+## Quick Start
 
-### 1. Copy environment templates
+See **[QUICK_START.md](QUICK_START.md)** for step-by-step setup instructions.
 
-```bash
-# For each service, copy the .env.example to .env
-cp Main-Backend/.env.example Main-Backend/.env
-cp Contract-Farming-App/.env.example Contract-Farming-App/.env
-cp Generate-Agreement-App/.env.example Generate-Agreement-App/.env
-cp Market-Access-App/.env.example Market-Access-App/.env
-cp Eureka-Main-Server/.env.example Eureka-Main-Server/.env
+---
+
+## Environment Variables
+
+### Root `.env` (Docker Compose infra variables)
+
+```properties
+DOCKER_USERNAME=your_dockerhub_username
+TAG=latest
+MYSQL_ROOT_PASSWORD=your_secure_password
+GATEWAY_URL=http://localhost:8080        # Public gateway URL shown in Swagger UI
 ```
 
-### 2. Configure environment variables
+### Per-service `.env` files
 
-Edit each `.env` file with your actual configuration values:
+Each service has its own `.env` file. Copy the `.env.example` for a template.
 
-#### Main-Backend (.env)
+#### Main-Backend/.env
 ```properties
 DB_URL=jdbc:mysql://localhost:3306/agri-connect?createDatabaseIfNotExist=true
 DB_USERNAME=root
 DB_PASSWORD=your_password
+PORT=2525
 JWT_SECRET=your_jwt_secret_min_256_bits
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_token
 TWILIO_PHONE_NUMBER=your_twilio_number
 ```
 
-#### Contract-Farming-App (.env)
+#### Contract-Farming-App/.env
 ```properties
+DB_URL=jdbc:mysql://localhost:3306/agri-connect?createDatabaseIfNotExist=true
+DB_USERNAME=root
+DB_PASSWORD=your_password
+PORT=2526
 RAZORPAY_KEY_ID=your_razorpay_key
 RAZORPAY_KEY_SECRET=your_razorpay_secret
-CONTRACT_ADDRESS=your_blockchain_contract_address
-PRIVATE_KEY=your_private_key
+CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000
+PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000000
 API_URL=http://localhost:8545
 ```
 
-#### Generate-Agreement-App (.env)
+#### Generate-Agreement-App/.env
 ```properties
+DB_URL=jdbc:mysql://localhost:3306/agri-connect?createDatabaseIfNotExist=true
+DB_USERNAME=root
+DB_PASSWORD=your_password
+PORT=2529
 MAIL_USERNAME=your_email@gmail.com
 MAIL_PASS=your_app_password
 GOOGLE_MAP_API_KEY=your_google_maps_key
 ```
 
-### 3. Database Setup
-
-```sql
-CREATE DATABASE IF NOT EXISTS `agri-connect`;
+#### Market-Access-App/.env
+```properties
+DB_URL=jdbc:mysql://localhost:3306/agri-connect?createDatabaseIfNotExist=true
+DB_USERNAME=root
+DB_PASSWORD=your_password
+PORT=2527
 ```
 
-The tables will be auto-created on first run (JPA DDL auto=update).
+---
 
-## Building the Project
+## Running the Stack
 
-### Build all services
+### Option A — Docker Compose (Recommended)
 
 ```bash
-mvn clean install
+# Start everything
+docker compose up -d
+
+# Rebuild a single service after code changes
+docker compose up --build --no-deps -d api-gateway
+
+# View logs
+docker compose logs -f api-gateway
+
+# Stop everything
+docker compose down
 ```
 
-### Build individual service
+**Startup order is handled automatically** via `depends_on` + `healthcheck` conditions.
+
+### Option B — Local (Maven)
+
+Start in this exact order:
 
 ```bash
-cd Main-Backend
-mvn clean install
+# 1. Eureka first — all others depend on it
+cd Eureka-Main-Server && mvn spring-boot:run
+
+# 2. Business services (any order, separate terminals)
+cd Main-Backend           && mvn spring-boot:run
+cd Contract-Farming-App   && mvn spring-boot:run
+cd Market-Access-App      && mvn spring-boot:run
+cd Generate-Agreement-App && mvn spring-boot:run
+
+# 3. Gateway last (after at least one service is registered in Eureka)
+cd Api-Gateway            && mvn spring-boot:run
 ```
 
-## Running the Services
+---
 
-### Recommended Startup Order
+## API Access
 
-1. **Start Eureka Server first**
+### All requests go through the gateway on port 8080
+
+| Service | Gateway prefix | Example |
+|---------|---------------|---------|
+| Main Backend | `/main` | `POST http://localhost:8080/main/auth/login` |
+| Contract Farming | `/contract-farming` | `GET http://localhost:8080/contract-farming/orders/all` |
+| Market Access | `/market` | `GET http://localhost:8080/market/listings/all/active` |
+| Generate Agreement | `/agreement` | `POST http://localhost:8080/agreement/contracts/generate` |
+
+### Swagger UI (Unified)
+
+Open: **http://localhost:8080/swagger-ui.html**
+
+Use the dropdown in the top-right corner to switch between services. All "Try it out" calls go through the gateway automatically.
+
+Individual service docs (for internal use):
+- http://localhost:2525/swagger-ui.html — Main Backend
+- http://localhost:2526/swagger-ui.html — Contract Farming
+- http://localhost:2527/swagger-ui.html — Market Access
+- http://localhost:2529/swagger-ui.html — Generate Agreement
+
+---
+
+## Health & Monitoring
+
+### Gateway (check all routes live)
 ```bash
-cd Eureka-Main-Server
-mvn spring-boot:run
-```
-Wait for Eureka to fully start (check http://localhost:8761)
+# Gateway health
+curl http://localhost:8080/actuator/health
 
-2. **Start other services in any order**
+# All registered routes
+curl http://localhost:8080/actuator/gateway/routes
+```
+
+### Individual services
 ```bash
-# Terminal 2
-cd Main-Backend
-mvn spring-boot:run
-
-# Terminal 3
-cd Contract-Farming-App
-mvn spring-boot:run
-
-# Terminal 4
-cd Market-Access-App
-mvn spring-boot:run
-
-# Terminal 5
-cd Generate-Agreement-App
-mvn spring-boot:run
+curl http://localhost:2525/actuator/health  # Main-Backend
+curl http://localhost:2526/actuator/health  # Contract-Farming-App
+curl http://localhost:2527/actuator/health  # Market-Access-App
+curl http://localhost:2529/actuator/health  # Generate-Agreement-App
+curl http://localhost:8761/actuator/health  # Eureka
 ```
 
-## Service Endpoints
+### Eureka Dashboard
+Open: http://localhost:8761 — shows all registered services and their instances.
 
-### Eureka Server
-- Dashboard: http://localhost:8761
-
-### Main-Backend
-- Base URL: http://localhost:2525
-- Health: http://localhost:2525/actuator/health
-- Metrics: http://localhost:2525/actuator/prometheus
-
-### Contract-Farming-App
-- Base URL: http://localhost:2526
-- Health: http://localhost:2526/actuator/health
-
-### Market-Access-App
-- Base URL: http://localhost:2527
-- Health: http://localhost:2527/actuator/health
-
-### Generate-Agreement-App
-- Base URL: http://localhost:2529
-- Health: http://localhost:2529/actuator/health
-
-## API Documentation
-
-### Authentication (Main-Backend)
-
-#### Register User
-```http
-POST /auth/register
-Content-Type: application/json
-
-{
-  "username": "John Doe",
-  "phoneNumber": "9876543210",
-  "address": "123 Farm Road"
-}
-```
-
-#### Send OTP
-```http
-POST /auth/send-login-otp
-Content-Type: application/json
-
-{
-  "mobileNumber": "9876543210"
-}
-```
-
-#### Verify OTP & Login
-```http
-POST /auth/verify-and-login
-Content-Type: application/json
-
-{
-  "mobileNumber": "9876543210",
-  "otp": "123456"
-}
-```
-
-## Production Configuration
-
-### Environment Profiles
-
-Set `SPRING_PROFILES_ACTIVE=prod` for production deployment.
-
-### Production Checklist
-
-- [ ] Change default passwords in `.env` files
-- [ ] Use strong JWT secret (256 bits minimum)
-- [ ] Enable HTTPS (set `jwtCookie.setSecure(true)`)
-- [ ] Configure proper CORS origins
-- [ ] Set `JPA_DDL_AUTO=validate` (never use `update` in production)
-- [ ] Enable authentication for actuator endpoints
-- [ ] Configure proper database connection pooling
-- [ ] Set up log aggregation
-- [ ] Configure Eureka for production (multiple instances)
-- [ ] Set up monitoring and alerting
-
-### Security Best Practices
-
-1. **Never commit `.env` files** - They're already in `.gitignore`
-2. **Use environment variables** for all sensitive data
-3. **Rotate secrets regularly** (JWT, API keys, passwords)
-4. **Enable HTTPS** in production
-5. **Use strong password policies**
-6. **Implement rate limiting** on public endpoints
-7. **Keep dependencies updated** regularly
-
-## Monitoring & Observability
-
-### Health Checks
-
-All services expose health endpoints via Spring Boot Actuator:
-
-```bash
-curl http://localhost:2525/actuator/health
-```
-
-### Metrics
-
-Prometheus metrics are available at:
-
+### Prometheus Metrics
 ```bash
 curl http://localhost:2525/actuator/prometheus
 ```
 
-### Logging
+---
 
-Logs are configured per service:
-- Main-Backend: `logs/main-backend.log`
-- Contract-Farming-App: `logs/contract-farming.log`
-- Market-Access-App: `logs/market-access.log`
-- Generate-Agreement-App: `logs/generate-agreement.log`
-- Eureka-Server: `logs/eureka-server.log`
+## Circuit Breaker
 
-## Error Handling
+The gateway has Resilience4j circuit breakers on all 4 service routes. When a service is down or slow (> 10s), the circuit opens and returns a clean 503 instead of hanging the client:
 
-All services implement standardized error responses:
+```json
+{
+  "status": 503,
+  "error": "Service Unavailable",
+  "service": "Market Access",
+  "message": "The 'Market Access' service is temporarily unavailable. Please try again in a moment.",
+  "timestamp": "2026-02-22T10:30:00"
+}
+```
+
+Circuit breaker settings (per service): sliding window 10, failure threshold 50%, open for 15s, auto-transition to half-open.
+
+---
+
+## CORS
+
+CORS is handled **centrally by the gateway**. Individual services also have CORS configured for direct-access development. To avoid duplicate headers, the gateway uses `DedupeResponseHeader` to strip duplicate `Access-Control-Allow-Origin` values.
+
+Allowed origins (configure via `cors.allowed.origins` env):
+- `http://localhost:5000`
+- `http://localhost:5173`
+- `http://localhost:5174`
+
+---
+
+## Project Structure
+
+```
+Backend/
+├── Api-Gateway/                   # Spring Cloud Gateway (NEW)
+│   ├── src/main/java/.../
+│   │   ├── ApiGatewayApplication.java
+│   │   ├── config/OpenApiConfig.java
+│   │   ├── controller/FallbackController.java
+│   │   └── filter/LoggingFilter.java
+│   ├── src/main/resources/application.yml
+│   ├── Dockerfile
+│   └── .dockerignore
+├── Eureka-Main-Server/            # Service Discovery
+├── Main-Backend/                  # Auth & Users
+│   ├── src/main/java/.../
+│   │   ├── config/                # UserConfig (Security), OpenApiConfig, etc.
+│   │   ├── Controller/            # REST Controllers
+│   │   ├── Service/               # Business logic
+│   │   ├── Repository/            # Data access
+│   │   ├── Entity/                # JPA entities
+│   │   ├── DTO/                   # Data Transfer Objects
+│   │   ├── exception/             # Global exception handler
+│   │   └── jwt/                   # JWT filter & helper
+│   └── .env
+├── Contract-Farming-App/          # Contracts, Orders, Payments
+├── Market-Access-App/             # Listings & Images
+├── Generate-Agreement-App/        # PDF, Cold Storage, Email
+├── docker-compose.yml
+├── .env                           # Root Docker Compose vars
+├── README.md                      # This file
+├── QUICK_START.md                 # Get running in 10 minutes
+├── PRODUCTION_CHECKLIST.md        # Pre-deployment checklist
+└── API_GATEWAY_FRONTEND_MIGRATION.md  # Frontend URL migration guide
+```
+
+---
+
+## Frontend Integration
+
+When integrating a frontend, **all API calls must go through the gateway**. See **[API_GATEWAY_FRONTEND_MIGRATION.md](API_GATEWAY_FRONTEND_MIGRATION.md)** for the complete frontend migration guide, including:
+
+- Updated `apiConfig.js` for the new single `GATEWAY_URL`
+- Full endpoint mapping table (old ports → new gateway paths)
+- List of hardcoded URLs to fix in components
+
+---
+
+## Adding a New Microservice
+
+1. Create a Spring Boot project with Eureka Client dependency
+2. Set `spring.application.name` — this is the Eureka service ID
+3. Add `.env` and `.env.example` files
+4. Configure `application.yml` with environment variables
+5. Add `springdoc-openapi-starter-webmvc-ui` — use **`2.6.0`** for Spring Boot 3.3.x or **`2.7.0`** for Spring Boot 3.4.x
+6. Create `OpenApiConfig.java` with `@Value("${GATEWAY_URL:http://localhost:8080}")` server URL
+7. Add a new route to `Api-Gateway/src/main/resources/application.yml` under `spring.cloud.gateway.routes`
+8. Add a fallback method in `Api-Gateway/.../controller/FallbackController.java`
+9. Add the new service to `docker-compose.yml`
+10. Update `README.md` and `QUICK_START.md`
+
+### springdoc Version Matrix
+
+| Spring Boot | Spring Framework | springdoc version |
+|-------------|------------------|-------------------|
+| 3.3.x | 6.1.x | `2.6.0` (webmvc-ui) |
+| 3.4.x | 6.2.x | `2.7.0` (webmvc-ui) |
+| Gateway 3.4.x | 6.2.x | `2.7.0` (webflux-ui) |
+
+---
+
+## Troubleshooting
+
+### Service not visible in Eureka
+1. Ensure Eureka server is running at `http://localhost:8761`
+2. Verify `EUREKA_SERVER_URL` env variable
+3. Wait 30–60 seconds for registration heartbeat
+
+### Gateway returns 503 / circuit breaker open
+1. Check if the downstream service is running: `curl http://localhost:25xx/actuator/health`
+2. The circuit auto-closes after 15 seconds in half-open state
+3. Check gateway logs: `docker compose logs -f api-gateway`
+
+### Swagger UI "Failed to fetch" on Try it out
+1. Ensure `GATEWAY_URL` is set correctly (default: `http://localhost:8080`)
+2. The `servers[].url` in API docs must be the browser-accessible gateway URL
+
+### Duplicate CORS header error
+The gateway's `DedupeResponseHeader` filter handles this. If you see it, ensure `Api-Gateway/application.yml` has the `DedupeResponseHeader` default filter configured.
+
+### `ClassNotFoundException: LiteWebJarsResourceResolver` (springdoc)
+You are using springdoc `2.7.0+` on a **Spring Boot 3.3.x** service. Downgrade to `2.6.0` for that service.
+
+### `NoSuchMethodError: ControllerAdviceBean.<init>(Object)` (springdoc)
+You are using springdoc `2.6.0` on a **Spring Boot 3.4.x** service. Upgrade to `2.7.0` for that service.
+
+### Bean definition override error (`filterChain`)
+Two `@Configuration` classes in the same service both define a `filterChain` `@Bean`. Merge them into one or rename one bean using `@Bean("myFilterChain")`.
+
+---
+
+## Error Response Format
+
+All services return standardized error responses:
 
 ```json
 {
   "timestamp": "2026-01-25T10:30:00",
   "status": 404,
   "error": "Not Found",
-  "errorCode": "RESOURCE_NOT_FOUND",
   "message": "User not found with phoneNumber: '9876543210'",
-  "path": "/api/users/9876543210"
+  "path": "/main/users/9876543210"
 }
 ```
 
-## Common Issues & Troubleshooting
+---
 
-### Database Connection Issues
-```
-Error: Communications link failure
-Solution: Ensure MySQL is running and credentials are correct in .env
-```
+## Logging
 
-### Eureka Registration Issues
-```
-Error: Service not registering with Eureka
-Solution: 
-1. Ensure Eureka server is running
-2. Check EUREKA_SERVER_URL in .env
-3. Verify network connectivity
-```
+Logs are written to `logs/` in each service directory:
 
-### JWT Token Issues
-```
-Error: JWT signature does not match
-Solution: Ensure JWT_SECRET is same across restarts
-```
+| Service | Log file |
+|---------|---------|
+| Api-Gateway | `logs/api-gateway.log` |
+| Main-Backend | `logs/main-backend.log` |
+| Contract-Farming-App | `logs/contract-farming.log` |
+| Market-Access-App | `logs/market-access.log` |
+| Generate-Agreement-App | `logs/generate-agreement.log` |
+| Eureka-Main-Server | `logs/eureka-server.log` |
 
-## Development
-
-### Code Structure
-
-```
-Backend/
-├── Eureka-Main-Server/          # Service Discovery
-├── Main-Backend/                # Auth & Users
-│   ├── src/main/java/.../
-│   │   ├── config/             # Configuration classes
-│   │   ├── Controller/         # REST Controllers
-│   │   ├── Service/            # Business logic
-│   │   ├── Repository/         # Data access
-│   │   ├── Entity/             # JPA entities
-│   │   ├── DTO/                # Data Transfer Objects
-│   │   ├── exception/          # Exception handling
-│   │   ├── jwt/                # JWT utilities
-│   │   └── security/           # Security config
-│   └── .env                    # Environment variables
-├── Contract-Farming-App/        # Contracts & Blockchain
-├── Market-Access-App/           # Marketplace
-├── Generate-Agreement-App/      # PDF Generation
-└── README.md
-```
-
-### Adding a New Microservice
-
-1. Create Spring Boot project with Eureka Client dependency
-2. Add `.env` and `.env.example` files
-3. Configure `application.yml` with environment variables
-4. Implement exception handling (copy from existing services)
-5. Add health check endpoints via Actuator
-6. Register with Eureka server
-7. Update this README
-
-## Testing
-
-### Unit Tests
-
-```bash
-mvn test
-```
-
-### Integration Tests
-
-```bash
-mvn verify
-```
-
-## Deployment
-
-### Docker Deployment (Future)
-
-```bash
-# Build Docker images
-docker-compose build
-
-# Start all services
-docker-compose up -d
-```
-
-### Cloud Deployment
-
-Services can be deployed to:
-- AWS (ECS, EKS, Elastic Beanstalk)
-- Google Cloud (GKE, Cloud Run)
-- Azure (AKS, App Service)
-- Heroku
-- Railway
-
-## Contributing
-
-1. Create a feature branch
-2. Follow existing code structure and naming conventions
-3. Add appropriate exception handling
-4. Include logging for important operations
-5. Update `.env.example` if adding new environment variables
-6. Test thoroughly before committing
-7. Create a pull request with clear description
+---
 
 ## License
 
 [Your License Here]
 
-## Support
-
-For issues and questions:
-- Create an issue in the repository
-- Contact the development team
-
 ---
 
-**Last Updated**: January 2026
-**Version**: 1.0.0
+**Last Updated**: February 2026
+**Version**: 2.0.0
