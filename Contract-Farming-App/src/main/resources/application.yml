@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: "optional:file:.env[.properties],optional:file:./Contract-Farming-App/.env[.properties]"
   application:
     name: Contract-Farming-App
   profiles:

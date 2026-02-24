@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: "optional:file:.env[.properties],optional:file:./Market-Access-App/.env[.properties]"
   application:
     name: Market-Access-App
   profiles:

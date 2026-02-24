@@ -254,6 +254,11 @@ docker compose down -v
 
 # Check container status
 docker compose ps
+
+# On your server / local machine
+docker compose pull        # pulls all latest images from Docker Hub
+docker compose up -d       # restarts containers with new images
+docker image prune -f      # cleans up old dangling image layers
 ```
 
 ---
