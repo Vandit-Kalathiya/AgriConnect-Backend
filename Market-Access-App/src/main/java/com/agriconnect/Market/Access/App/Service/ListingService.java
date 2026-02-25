@@ -129,7 +129,6 @@ public class ListingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
 
         try {
-            // Update fields from request
             if (listingRequest.getProductName() != null) {
                 existingListing.setProductName(listingRequest.getProductName());
             }
@@ -142,22 +141,17 @@ public class ListingService {
             if (listingRequest.getFinalPrice() != null) {
                 existingListing.setFinalPrice(Double.parseDouble(listingRequest.getFinalPrice()));
             }
-            if (listingRequest.getHarvestedDate() != null) {
-                existingListing.setHarvestedDate(LocalDate.parse(listingRequest.getHarvestedDate()));
+            if (listingRequest.getAiGeneratedPrice() != null) {
+                existingListing.setAiGeneratedPrice(Double.parseDouble(listingRequest.getAiGeneratedPrice()));
             }
-//            if (listingRequest.getAvailabilityDate() != null) {
-//                existingListing.setAvailabilityDate(LocalDate.parse(listingRequest.getAvailabilityDate()));
-//            }
-//            if (listingRequest.getQualityGrade() != null) {
-//                existingListing.setQualityGrade(listingRequest.getQualityGrade());
-//            }
+            if (listingRequest.getHarvestedDate() != null && !listingRequest.getHarvestedDate().isEmpty()) {
+                existingListing.setHarvestedDate(LocalDate.parse(listingRequest.getHarvestedDate(), DATE_FORMATTER));
+            }
             if (listingRequest.getStorageCondition() != null) {
                 existingListing.setStorageCondition(listingRequest.getStorageCondition());
             }
             if (listingRequest.getQuantity() != null) {
-                long existingQty = Long.parseLong(existingListing.getQuantity().toString());
-                long requestedQty = Long.parseLong(listingRequest.getQuantity());
-                existingListing.setQuantity(Long.parseLong(String.valueOf(Math.max(0, existingQty - requestedQty))));
+                existingListing.setQuantity(Long.parseLong(listingRequest.getQuantity()));
             }
             if (listingRequest.getUnitOfQuantity() != null) {
                 existingListing.setUnitOfQuantity(listingRequest.getUnitOfQuantity());
@@ -165,9 +159,6 @@ public class ListingService {
             if (listingRequest.getLocation() != null) {
                 existingListing.setLocation(listingRequest.getLocation());
             }
-//            if (listingRequest.getCertifications() != null) {
-//                existingListing.setCertifications(listingRequest.getCertifications());
-//            }
             if (listingRequest.getShelfLifetime() != null) {
                 existingListing.setShelfLifetime(Long.parseLong(listingRequest.getShelfLifetime()));
             }
@@ -175,12 +166,10 @@ public class ListingService {
                 existingListing.setContactOfFarmer(listingRequest.getContactOfFarmer());
             }
 
-            // Handle image updates
-            if (images != null && !images.isEmpty()) {
-                // Optional: Remove existing images if you want to replace them
-                // existingListing.getImages().clear();
-                // imageRepository.deleteAll(existingListing.getImages());
+            existingListing.setLastUpdatedDate(LocalDate.now());
 
+            // Append new images to the existing listing images
+            if (images != null && !images.isEmpty()) {
                 for (MultipartFile file : images) {
                     if (!file.isEmpty()) {
                         Image image = Image.builder()
@@ -192,8 +181,6 @@ public class ListingService {
                                 .createTime(LocalTime.now())
                                 .listing(existingListing)
                                 .build();
-
-//                        image.setDownloadUrl("/images/" + image.getId());
                         imageRepository.save(image);
                         existingListing.getImages().add(image);
                     }
