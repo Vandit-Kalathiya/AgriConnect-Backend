@@ -63,8 +63,6 @@ logging:
   level:
     root: ${LOG_LEVEL_ROOT:INFO}
     com.agriconnect: ${LOG_LEVEL_APP:DEBUG}
-  file:
-    name: ${LOG_FILE:logs/contract-farming.log}
 
 management:
   endpoints:

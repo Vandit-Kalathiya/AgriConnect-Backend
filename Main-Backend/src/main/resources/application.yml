@@ -80,11 +80,6 @@ logging:
     org.hibernate: ${LOG_LEVEL_HIBERNATE:WARN}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-  file:
-    name: ${LOG_FILE:logs/main-backend.log}
-    max-size: ${LOG_FILE_MAX_SIZE:10MB}
-    max-history: ${LOG_FILE_MAX_HISTORY:30}
 
 management:
   endpoints:
