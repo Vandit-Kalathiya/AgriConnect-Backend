@@ -26,7 +26,7 @@ import java.util.List;
 @Transactional
 public class ListingService {
 
-    private static final Logger logger = LoggerFactory.getLogger(ListingService.class);
+    private static final Logger log = LoggerFactory.getLogger(ListingService.class);
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private final ListingRepository listingRepository;
@@ -38,7 +38,7 @@ public class ListingService {
     }
 
     public Listing addListing(ListingRequest listingRequest, List<MultipartFile> images) {
-        logger.info("Adding new listing for product: {}", listingRequest.getProductName());
+        log.info("Adding new listing for product: {}", listingRequest.getProductName());
 
         try {
             Listing listing = new Listing();
@@ -108,23 +108,23 @@ public class ListingService {
             // Update listing with images
             listing = listingRepository.save(listing);
             
-            logger.info("Listing added successfully with ID: {}", listing.getId());
+            log.info("Listing added successfully with ID: {}", listing.getId());
             return listing;
 
         } catch (NumberFormatException e) {
-            logger.error("Invalid number format in listing request", e);
+            log.error("Invalid number format in listing request", e);
             throw new BadRequestException("Invalid number format in listing request", e);
         } catch (DateTimeParseException e) {
-            logger.error("Invalid date format in listing request", e);
+            log.error("Invalid date format in listing request", e);
             throw new BadRequestException("Invalid date format in listing request. Expected format: yyyy-MM-dd", e);
         } catch (IOException e) {
-            logger.error("Failed to process image files", e);
+            log.error("Failed to process image files", e);
             throw new BadRequestException("Failed to process image files", e);
         }
     }
 
     public Listing updateListing(String listingId, ListingRequest listingRequest, List<MultipartFile> images) {
-        logger.info("Updating listing with ID: {}", listingId);
+        log.info("Updating listing with ID: {}", listingId);
         Listing existingListing = listingRepository.findById(listingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
 
@@ -199,13 +199,13 @@ public class ListingService {
     }
 
     public Listing getListingById(String listingId) {
-        logger.debug("Fetching listing with ID: {}", listingId);
+        log.debug("Fetching listing with ID: {}", listingId);
         return listingRepository.findById(listingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
     }
 
     public List<byte[]> getListingImages(String listingId) {
-        logger.debug("Fetching images for listing ID: {}", listingId);
+        log.debug("Fetching images for listing ID: {}", listingId);
         Listing listing = listingRepository.findById(listingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
 
@@ -217,12 +217,12 @@ public class ListingService {
     }
 
     public List<Listing> getAllListings() {
-        logger.debug("Fetching all listings");
-        return listingRepository.findAll();
+        log.debug("Fetching all listings");
+        return listingRepository.findAll(); 
     }
 
     public void deleteListing(String listingId) {
-        logger.info("Deleting listing with ID: {}", listingId);
+        log.info("Deleting listing with ID: {}", listingId);
         Listing listing = listingRepository.findById(listingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
 
@@ -232,11 +232,11 @@ public class ListingService {
         }
 
         listingRepository.deleteById(listingId);
-        logger.info("Listing deleted successfully with ID: {}", listingId);
+        log.info("Listing deleted successfully with ID: {}", listingId);
     }
 
     public Listing updateListingStatus(String listingId, String status, String quantity) {
-        logger.info("Updating status for listing ID: {} to status: {}", listingId, status);
+        log.info("Updating status for listing ID: {} to status: {}", listingId, status);
         
         Listing existingListing = listingRepository.findById(listingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
@@ -255,17 +255,17 @@ public class ListingService {
         }
         
         Listing updated = listingRepository.save(existingListing);
-        logger.info("Listing status updated successfully for ID: {}", listingId);
+        log.info("Listing status updated successfully for ID: {}", listingId);
         return updated;
     }
 
     public List<Listing> getActiveListings() {
-        logger.debug("Fetching active listings");
+        log.debug("Fetching active listings");
         return listingRepository.findActiveListings();
     }
 
     public List<Listing> getListingByFarmerContact(String farmerContact) {
-        logger.debug("Fetching listings for farmer contact: {}", farmerContact);
+        log.debug("Fetching listings for farmer contact: {}", farmerContact);
         return listingRepository.findByContactOfFarmer(farmerContact)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing", "farmerContact", farmerContact));
     }
