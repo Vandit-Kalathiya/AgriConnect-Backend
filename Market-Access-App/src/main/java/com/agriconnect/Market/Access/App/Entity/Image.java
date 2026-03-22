@@ -31,7 +31,7 @@ public class Image {
     private Listing listing;
 
     @Lob
-    @Column(columnDefinition = "LONGBLOB")
+    @Column(columnDefinition = "bytea")
     @JsonIgnore
     private byte[] data;
 

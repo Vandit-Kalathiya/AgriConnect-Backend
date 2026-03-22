@@ -37,12 +37,12 @@ public class User implements UserDetails {
     private boolean enabled = false;
 
     @Lob
-    @Column(columnDefinition = "LONGBLOB")
+    @Column(columnDefinition = "bytea")
     @JsonIgnore
     private byte[] profilePicture;
 
     @Lob
-    @Column(columnDefinition = "LONGBLOB")
+    @Column(columnDefinition = "bytea")
     @JsonIgnore
     private byte[] signature;
 
