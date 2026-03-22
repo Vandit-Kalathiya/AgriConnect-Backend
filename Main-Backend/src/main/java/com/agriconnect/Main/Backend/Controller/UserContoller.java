@@ -71,4 +71,10 @@ public class UserContoller {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.BAD_REQUEST);
         }
     }
+
+    // Add a test path to check whether service is reachable or not
+    @GetMapping("/test")
+    public ResponseEntity<?> test() {
+        return ResponseEntity.ok("Server is running");
+    }
 }
