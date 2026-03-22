@@ -1,25 +1,5 @@
 services:
 
-  mysql:
-    image: mysql:8.0
-    container_name: agriconnect-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: agri-connect
-    ports:
-      - "3307:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-    networks:
-      - agriconnect
-
   eureka-server:
     build:
       context: ./Eureka-Main-Server
@@ -53,12 +33,9 @@ services:
       - "2525:2525"
     env_file: ./Main-Backend/.env
     environment:
-      DB_URL: jdbc:mysql://mysql:3306/agri-connect?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       GATEWAY_URL: ${GATEWAY_URL:-http://localhost:8080}
     depends_on:
-      mysql:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -81,12 +58,9 @@ services:
       - "2526:2526"
     env_file: ./Contract-Farming-App/.env
     environment:
-      DB_URL: jdbc:mysql://mysql:3306/agri-connect?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       GATEWAY_URL: ${GATEWAY_URL:-http://localhost:8080}
     depends_on:
-      mysql:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -109,12 +83,9 @@ services:
       - "2527:2527"
     env_file: ./Market-Access-App/.env
     environment:
-      DB_URL: jdbc:mysql://mysql:3306/agri-connect?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       GATEWAY_URL: ${GATEWAY_URL:-http://localhost:8080}
     depends_on:
-      mysql:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -137,12 +108,9 @@ services:
       - "2529:2529"
     env_file: ./Generate-Agreement-App/.env
     environment:
-      DB_URL: jdbc:mysql://mysql:3306/agri-connect?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       GATEWAY_URL: ${GATEWAY_URL:-http://localhost:8080}
     depends_on:
-      mysql:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -178,10 +146,6 @@ services:
       start_period: 60s
     networks:
       - agriconnect
-
-volumes:
-  mysql-data:
-    driver: local
 
 networks:
   agriconnect:
