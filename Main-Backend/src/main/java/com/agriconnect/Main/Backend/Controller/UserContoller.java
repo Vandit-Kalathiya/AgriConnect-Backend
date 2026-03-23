@@ -75,6 +75,6 @@ public class UserContoller {
     // Add a test path to check whether service is reachable or not
     @GetMapping("/test")
     public ResponseEntity<?> test() {
-        return ResponseEntity.ok("Server is running");
+        return ResponseEntity.ok("Server is running.! Hurray.!!");
     }
 }

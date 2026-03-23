@@ -16,10 +16,11 @@
 #                        Runs only on direct push to main (not PRs).
 #
 #  3. deploy             SSH into EC2, update the TAG in the root .env,
-#                        pull new images, and restart all containers.
-#                        Runs only after docker-push succeeds.
+#                        pull new images, restart all containers, and
+#                        reload Nginx. Runs only after docker-push succeeds.
 #
-#  4. pipeline-summary   Writes a Markdown summary to the Actions page.
+#  4. pipeline-summary   Writes a single consolidated Markdown summary
+#                        at the end of the entire pipeline run.
 #
 # ──────────────────────────────────────────────────────────────────────
 #  Required GitHub Secrets  (Settings → Secrets → Actions)
@@ -39,7 +40,6 @@
 #  3. ~/AgriConnect_Backend/.env  populated with:
 #       DOCKER_USERNAME=<your-dockerhub-username>
 #       TAG=latest                    ← pipeline updates this automatically
-#       MYSQL_ROOT_PASSWORD=<...>
 #       GATEWAY_URL=http://<EC2-IP>:8080
 #  4. Service .env files in place:
 #       ~/AgriConnect_Backend/Main-Backend/.env
@@ -156,7 +156,6 @@ jobs:
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
 
       - name: Build and push Docker image
-        id: build
         uses: docker/build-push-action@v5
         with:
           context: ./${{ matrix.service }}
@@ -165,18 +164,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-
-      - name: Write image summary
-        run: |
-          SHORT_SHA=$(git rev-parse --short HEAD)
-          echo "### Image pushed: \`${{ secrets.DOCKER_USERNAME }}/${{ matrix.image }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Tag | Full reference |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|----------------|" >> $GITHUB_STEP_SUMMARY
-          echo "| \`latest\` | \`${{ secrets.DOCKER_USERNAME }}/${{ matrix.image }}:latest\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`sha-${SHORT_SHA}\` | \`${{ secrets.DOCKER_USERNAME }}/${{ matrix.image }}:sha-${SHORT_SHA}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`build-${{ github.run_number }}\` | \`${{ secrets.DOCKER_USERNAME }}/${{ matrix.image }}:build-${{ github.run_number }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| digest | \`${{ steps.build.outputs.digest }}\` |" >> $GITHUB_STEP_SUMMARY
 
 
   # ──────────────────────────────────────────────────────────────────
@@ -187,7 +174,7 @@ jobs:
   #   2. Update TAG     — point .env at the exact sha-tagged images
   #   3. compose pull   — download the new images from Docker Hub
   #   4. compose up -d  — restart containers with the new images
-  #   5. image prune    — reclaim disk space from old layers
+  #   5. nginx reload   — apply any Nginx config changes
   # ──────────────────────────────────────────────────────────────────
   deploy:
     name: "Deploy to EC2"
@@ -225,42 +212,34 @@ jobs:
 
             cd "$APP_DIR"
 
-            echo "━━━ [1/4] Pulling latest repo changes ━━━"
+            echo "━━━ [1/5] Pulling latest repo changes ━━━"
             git pull origin main
 
-            echo "━━━ [2/4] Pinning image tag → sha-${SHORT_SHA} ━━━"
+            echo "━━━ [2/5] Pinning image tag → sha-${SHORT_SHA} ━━━"
             if grep -q "^TAG=" .env 2>/dev/null; then
               sed -i "s|^TAG=.*|TAG=sha-${SHORT_SHA}|" .env
             else
               echo "TAG=sha-${SHORT_SHA}" >> .env
             fi
 
-            echo "━━━ [3/4] Pulling Docker images ━━━"
+            echo "━━━ [3/5] Pulling Docker images ━━━"
             docker compose pull
 
-            echo "━━━ [4/4] Restarting services ━━━"
+            echo "━━━ [4/5] Restarting services ━━━"
             docker compose up -d --remove-orphans
             docker image prune -f
+
+            echo "━━━ [5/5] Reloading Nginx ━━━"
+            sudo nginx -t && sudo systemctl reload nginx
 
             echo ""
             echo "━━━ Deployment complete ━━━"
             docker compose ps
 
-      - name: Write deploy summary
-        if: success()
-        run: |
-          echo "### Deployed to EC2 ✅" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Detail | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Host | \`${{ secrets.EC2_HOST }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Image tag | \`sha-${{ steps.sha.outputs.short }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Triggered by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-
 
   # ──────────────────────────────────────────────────────────────────
   # JOB 4 · Pipeline Summary
+  # Single consolidated summary written once at the very end.
   # ──────────────────────────────────────────────────────────────────
   pipeline-summary:
     name: "Pipeline Summary"
@@ -269,11 +248,16 @@ jobs:
     if: always()
 
     steps:
-      - name: Write pipeline summary
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Write consolidated summary
         run: |
           BUILD_RESULT="${{ needs.build.result }}"
           DOCKER_RESULT="${{ needs.docker-push.result }}"
           DEPLOY_RESULT="${{ needs.deploy.result }}"
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          DOCKER_USER="${{ secrets.DOCKER_USERNAME }}"
 
           icon() {
             if   [[ "$1" == "success"  ]]; then echo "✅ Passed"
@@ -282,15 +266,47 @@ jobs:
             else echo "⚠️ $1"; fi
           }
 
-          echo "## AgriConnect CI/CD Pipeline" >> $GITHUB_STEP_SUMMARY
+          # ── Pipeline status ────────────────────────────────────────
+          echo "## AgriConnect CI/CD — Run #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Stage | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Build & Package (6 services) | $(icon $BUILD_RESULT) |" >> $GITHUB_STEP_SUMMARY
           echo "| Docker Build & Push          | $(icon $DOCKER_RESULT) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Deploy to EC2                | $(icon $DEPLOY_RESULT) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy to EC2 + Nginx reload | $(icon $DEPLOY_RESULT) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Actor:** @${{ github.actor }} &nbsp;|&nbsp; **Branch:** \`${{ github.ref_name }}\` &nbsp;|&nbsp; **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Actor:** @${{ github.actor }} &nbsp;|&nbsp; **Branch:** \`${{ github.ref_name }}\` &nbsp;|&nbsp; **Commit:** \`${SHORT_SHA}\`" >> $GITHUB_STEP_SUMMARY
+
+          # ── Docker images (only when push succeeded) ───────────────
+          if [[ "$DOCKER_RESULT" == "success" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Docker Images pushed to Hub" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Image | Tags |" >> $GITHUB_STEP_SUMMARY
+            echo "|-------|------|" >> $GITHUB_STEP_SUMMARY
+            for image in \
+              agriconnect-eureka-server \
+              agriconnect-main-backend \
+              agriconnect-contract-farming \
+              agriconnect-market-access \
+              agriconnect-generate-agreement \
+              agriconnect-api-gateway
+            do
+              echo "| \`${DOCKER_USER}/${image}\` | \`latest\` · \`sha-${SHORT_SHA}\` · \`build-${{ github.run_number }}\` |" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+
+          # ── Deploy details (only when deploy succeeded) ────────────
+          if [[ "$DEPLOY_RESULT" == "success" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Deployment Details" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Detail | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Host | \`${{ secrets.EC2_HOST }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| Image tag deployed | \`sha-${SHORT_SHA}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| Nginx | Reloaded ✅ |" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Fail if build stage failed
         if: needs.build.result == 'failure'
