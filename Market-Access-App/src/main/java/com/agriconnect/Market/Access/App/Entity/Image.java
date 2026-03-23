@@ -30,7 +30,6 @@ public class Image {
     @JsonBackReference
     private Listing listing;
 
-    @Lob
     @Column(columnDefinition = "bytea")
     @JsonIgnore
     private byte[] data;

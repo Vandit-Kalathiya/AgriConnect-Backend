@@ -36,12 +36,10 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private boolean enabled = false;
 
-    @Lob
     @Column(columnDefinition = "bytea")
     @JsonIgnore
     private byte[] profilePicture;
 
-    @Lob
     @Column(columnDefinition = "bytea")
     @JsonIgnore
     private byte[] signature;
