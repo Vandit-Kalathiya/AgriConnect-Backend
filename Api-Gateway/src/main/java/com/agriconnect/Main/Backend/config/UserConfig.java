@@ -2,14 +2,11 @@ package com.agriconnect.Main.Backend.config;
 
 import com.agriconnect.Main.Backend.jwt.JwtAuthenticationFilter;
 import com.agriconnect.Main.Backend.filter.UserIdentityPropagationFilter;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -24,11 +21,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.time.LocalDateTime;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
@@ -52,31 +46,6 @@ public class UserConfig {
 
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
-        http.exceptionHandling(ex -> ex
-                .authenticationEntryPoint((request, response, authException) -> {
-                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    Map<String, Object> body = new LinkedHashMap<>();
-                    body.put("timestamp", LocalDateTime.now().toString());
-                    body.put("status", 401);
-                    body.put("error", "Unauthorized");
-                    body.put("message", "Authentication required: include a valid Bearer token in the Authorization header or jwt_token cookie");
-                    body.put("path", request.getRequestURI());
-                    new ObjectMapper().writeValue(response.getWriter(), body);
-                })
-                .accessDeniedHandler((request, response, accessDeniedException) -> {
-                    response.setStatus(HttpStatus.FORBIDDEN.value());
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    Map<String, Object> body = new LinkedHashMap<>();
-                    body.put("timestamp", LocalDateTime.now().toString());
-                    body.put("status", 403);
-                    body.put("error", "Forbidden");
-                    body.put("message", "You do not have permission to access this resource");
-                    body.put("path", request.getRequestURI());
-                    new ObjectMapper().writeValue(response.getWriter(), body);
-                })
-        );
-
         http.authorizeHttpRequests(authorize -> {
             // Public: Swagger UI + OpenAPI docs (including proxied downstream docs)
             authorize.requestMatchers(
@@ -85,8 +54,7 @@ public class UserConfig {
                     "/swagger-ui.html",
                     "/webjars/**",
                     "/*/v3/api-docs",
-                    "/*/v3/api-docs/**"
-            ).permitAll();
+                    "/*/v3/api-docs/**").permitAll();
 
             // Public: Actuator health probe only
             authorize.requestMatchers("/actuator/health").permitAll();
@@ -111,7 +79,8 @@ public class UserConfig {
 
         http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        // JWT filter populates SecurityContext; identity filter adds X-User-Phone to proxied requests
+        // JWT filter populates SecurityContext; identity filter adds X-User-Phone to
+        // proxied requests
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         http.addFilterAfter(identityFilter, JwtAuthenticationFilter.class);
 
