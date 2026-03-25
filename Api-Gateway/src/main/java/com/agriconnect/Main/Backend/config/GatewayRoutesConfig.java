@@ -20,7 +20,7 @@ public class GatewayRoutesConfig {
     public RouterFunction<ServerResponse> contractFarmingRoute() {
         return GatewayRouterFunctions.route("contract-farming-cb")
                 .route(path("/contract-farming/**"), HandlerFunctions.http("lb://Contract-Farming-App"))
-                .filter(BeforeFilterFunctions.stripPrefix(1))
+                .before(BeforeFilterFunctions.stripPrefix(1))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker("contractFarming",
                         URI.create("forward:/fallback/contract-farming")))
                 .build();
@@ -30,7 +30,7 @@ public class GatewayRoutesConfig {
     public RouterFunction<ServerResponse> marketAccessRoute() {
         return GatewayRouterFunctions.route("market-access-cb")
                 .route(path("/market/**"), HandlerFunctions.http("lb://Market-Access-App"))
-                .filter(BeforeFilterFunctions.stripPrefix(1))
+                .before(BeforeFilterFunctions.stripPrefix(1))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker("marketAccess",
                         URI.create("forward:/fallback/market")))
                 .build();
@@ -40,7 +40,7 @@ public class GatewayRoutesConfig {
     public RouterFunction<ServerResponse> generateAgreementRoute() {
         return GatewayRouterFunctions.route("generate-agreement-cb")
                 .route(path("/agreement/**"), HandlerFunctions.http("lb://Generate-Agreement-App"))
-                .filter(BeforeFilterFunctions.stripPrefix(1))
+                .before(BeforeFilterFunctions.stripPrefix(1))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker("generateAgreement",
                         URI.create("forward:/fallback/agreement")))
                 .build();
