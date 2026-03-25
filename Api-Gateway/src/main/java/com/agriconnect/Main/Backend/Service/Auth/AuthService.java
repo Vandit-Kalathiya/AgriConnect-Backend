@@ -28,7 +28,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,7 +53,7 @@ public class AuthService {
     private final SessionRepository sessionRepository;
     private final UserRepository userRepository;
     private final TwilioOtpService twilioOtpService;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
     @Value("${jwt.expiration:604800000}")
     private Long jwtExpiration;
@@ -66,7 +66,7 @@ public class AuthService {
                        SessionRepository sessionRepository,
                        UserRepository userRepository,
                        TwilioOtpService twilioOtpService,
-                       BCryptPasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder) {
         this.manager = manager;
         this.jwtHelper = jwtHelper;
         this.userDetailsService = userDetailsService;

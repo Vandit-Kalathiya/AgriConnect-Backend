@@ -44,6 +44,12 @@ services:
     depends_on:
       eureka-server:
         condition: service_healthy
+      market-access:
+        condition: service_healthy
+      contract-farming:
+        condition: service_healthy
+      generate-agreement:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 15s
@@ -95,6 +101,7 @@ services:
     environment:
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       GATEWAY_URL: ${GATEWAY_URL:-http://localhost:8080}
+      SPRING_PROFILES_ACTIVE: prod
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -120,6 +127,7 @@ services:
     environment:
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       GATEWAY_URL: ${GATEWAY_URL:-http://localhost:8080}
+      SPRING_PROFILES_ACTIVE: prod
     depends_on:
       eureka-server:
         condition: service_healthy
