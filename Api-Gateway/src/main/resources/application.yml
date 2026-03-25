@@ -39,37 +39,8 @@ spring:
       enabled: true
 
   # ── Spring Cloud Gateway MVC ─────────────────────────────────────────────
-  # Routes all downstream traffic.  Auth/user endpoints are handled locally
-  # by this service itself (no route needed).
-  #
-  # StripPrefix=1 removes the service prefix before forwarding:
-  #   /market/listings  →  Market-Access-App:/listings
-  #
-  # CircuitBreaker forwards to /fallback/* when a service is down.
-  cloud:
-    gateway:
-      mvc:
-        routes:
-          - id: contract-farming
-            uri: lb://Contract-Farming-App
-            predicates:
-              - Path=/contract-farming/**
-            filters:
-              - StripPrefix=1
-
-          - id: market-access
-            uri: lb://Market-Access-App
-            predicates:
-              - Path=/market/**
-            filters:
-              - StripPrefix=1
-
-          - id: generate-agreement
-            uri: lb://Generate-Agreement-App
-            predicates:
-              - Path=/agreement/**
-            filters:
-              - StripPrefix=1
+  # Routes are defined programmatically in GatewayRoutesConfig.java with
+  # Resilience4j circuit breakers. No YAML routes needed here.
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 cors:
@@ -120,23 +91,23 @@ resilience4j:
     instances:
       contractFarming:
         slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        permittedNumberOfCallsInHalfOpenState: 3
-        waitDurationInOpenState: 15s
+        minimumNumberOfCalls: 3
+        permittedNumberOfCallsInHalfOpenState: 2
+        waitDurationInOpenState: 10s
         failureRateThreshold: 50
         automaticTransitionFromOpenToHalfOpenEnabled: true
       marketAccess:
         slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        permittedNumberOfCallsInHalfOpenState: 3
-        waitDurationInOpenState: 15s
+        minimumNumberOfCalls: 3
+        permittedNumberOfCallsInHalfOpenState: 2
+        waitDurationInOpenState: 10s
         failureRateThreshold: 50
         automaticTransitionFromOpenToHalfOpenEnabled: true
       generateAgreement:
         slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        permittedNumberOfCallsInHalfOpenState: 3
-        waitDurationInOpenState: 15s
+        minimumNumberOfCalls: 3
+        permittedNumberOfCallsInHalfOpenState: 2
+        waitDurationInOpenState: 10s
         failureRateThreshold: 50
         automaticTransitionFromOpenToHalfOpenEnabled: true
   timelimiter:
