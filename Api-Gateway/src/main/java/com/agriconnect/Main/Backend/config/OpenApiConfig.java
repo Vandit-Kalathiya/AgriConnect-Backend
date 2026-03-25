@@ -21,12 +21,10 @@ import java.util.List;
         scheme = "bearer",
         bearerFormat = "JWT",
         in = SecuritySchemeIn.HEADER,
-        description = "Provide the JWT token obtained from /auth/login. Format: Bearer <token>"
+        description = "JWT obtained from POST /auth/verify-otp or cookie jwt_token. Format: Bearer <token>"
 )
 public class OpenApiConfig {
 
-    // Public-facing gateway URL (browser-accessible).
-    // Override via GATEWAY_URL env variable in production.
     @Value("${GATEWAY_URL:http://localhost:8080}")
     private String gatewayUrl;
 
@@ -34,14 +32,29 @@ public class OpenApiConfig {
     public OpenAPI openAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("Main Backend — Authentication & User Service")
-                        .description("Handles user registration, login, OTP verification, JWT authentication, and user profile management.")
-                        .version("1.0.0")
+                        .title("AgriConnect — API Gateway")
+                        .description("""
+                                Central entry point for the AgriConnect platform.
+
+                                **Authentication flow:**
+                                1. `POST /auth/register` → receive OTP via SMS
+                                2. `POST /auth/r/verify-otp/{phone}/{otp}` → create account
+                                3. `POST /auth/login` → receive login OTP
+                                4. `POST /auth/verify-otp/{phone}/{otp}` → receive JWT (cookie + JSON)
+                                5. Include the JWT in every subsequent request via cookie `jwt_token` \\
+                                   or `Authorization: Bearer <token>` header.
+
+                                **Proxied services (require JWT):**
+                                - `/market/**` → Market Access App (Listings)
+                                - `/contract-farming/**` → Contract Farming App (Agreements, Orders, Payments)
+                                - `/agreement/**` → Agreement Generator (PDF contracts, Cold Storage)
+                                """)
+                        .version("2.0.0")
                         .contact(new Contact().name("AgriConnect Team")))
                 .addSecurityItem(new SecurityRequirement().addList("bearerAuth"))
                 .servers(List.of(
                         new Server()
-                                .url(gatewayUrl + "/main")
+                                .url(gatewayUrl)
                                 .description("API Gateway")
                 ));
     }

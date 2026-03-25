@@ -1,4 +1,4 @@
-FROM maven:3-eclipse-temurin-21 AS build
+FROM maven:3-eclipse-temurin-23 AS build
 WORKDIR /app
 
 COPY pom.xml ./
@@ -7,7 +7,7 @@ RUN mvn dependency:resolve -B -q
 COPY src/ src/
 RUN mvn package -DskipTests -B -q
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:23-jre
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl \

@@ -5,86 +5,101 @@ spring:
     name: Api-Gateway
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: ${DB_CONNECTION_TIMEOUT:30000}
+      maximum-pool-size: ${DB_MAX_POOL_SIZE:10}
+      minimum-idle: ${DB_MIN_IDLE:5}
+      idle-timeout: ${DB_IDLE_TIMEOUT:600000}
+      max-lifetime: ${DB_MAX_LIFETIME:1800000}
+      auto-commit: true
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: false
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+    show-sql: ${JPA_SHOW_SQL:false}
+  servlet:
+    multipart:
+      max-file-size: ${MAX_FILE_SIZE:10MB}
+      max-request-size: ${MAX_REQUEST_SIZE:10MB}
+      enabled: true
+
+  # ── Spring Cloud Gateway MVC ─────────────────────────────────────────────
+  # Routes all downstream traffic.  Auth/user endpoints are handled locally
+  # by this service itself (no route needed).
+  #
+  # StripPrefix=1 removes the service prefix before forwarding:
+  #   /market/listings  →  Market-Access-App:/listings
+  #
+  # CircuitBreaker forwards to /fallback/* when a service is down.
   cloud:
     gateway:
-      # ── Routes ────────────────────────────────────────────────────────────
-      # All routes use lb:// (Eureka load-balanced) URIs so no IPs are
-      # hardcoded. The service names must match spring.application.name in
-      # each downstream service.
-      #
-      # StripPrefix=1 removes the service prefix before forwarding, so:
-      #   /main/auth/login  →  Main-Backend:/auth/login
-      #
-      # Circuit breakers forward to /fallback/* when a service is down or
-      # when the timelimiter threshold is exceeded.
-      routes:
-        - id: main-backend
-          uri: lb://Main-Backend
-          predicates:
-            - Path=/main/**
-          filters:
-            - StripPrefix=1
-            - name: CircuitBreaker
-              args:
-                name: mainBackend
-                fallbackUri: forward:/fallback/main
+      mvc:
+        routes:
+          - id: contract-farming
+            uri: lb://Contract-Farming-App
+            predicates:
+              - Path=/contract-farming/**
+            filters:
+              - StripPrefix=1
+              - name: CircuitBreaker
+                args:
+                  name: contractFarming
+                  fallbackUri: forward:/fallback/contract-farming
 
-        - id: contract-farming
-          uri: lb://Contract-Farming-App
-          predicates:
-            - Path=/contract-farming/**
-          filters:
-            - StripPrefix=1
-            - name: CircuitBreaker
-              args:
-                name: contractFarming
-                fallbackUri: forward:/fallback/contract-farming
+          - id: market-access
+            uri: lb://Market-Access-App
+            predicates:
+              - Path=/market/**
+            filters:
+              - StripPrefix=1
+              - name: CircuitBreaker
+                args:
+                  name: marketAccess
+                  fallbackUri: forward:/fallback/market
 
-        - id: market-access
-          uri: lb://Market-Access-App
-          predicates:
-            - Path=/market/**
-          filters:
-            - StripPrefix=1
-            - name: CircuitBreaker
-              args:
-                name: marketAccess
-                fallbackUri: forward:/fallback/market
+          - id: generate-agreement
+            uri: lb://Generate-Agreement-App
+            predicates:
+              - Path=/agreement/**
+            filters:
+              - StripPrefix=1
+              - name: CircuitBreaker
+                args:
+                  name: generateAgreement
+                  fallbackUri: forward:/fallback/agreement
 
-        - id: generate-agreement
-          uri: lb://Generate-Agreement-App
-          predicates:
-            - Path=/agreement/**
-          filters:
-            - StripPrefix=1
-            - name: CircuitBreaker
-              args:
-                name: generateAgreement
-                fallbackUri: forward:/fallback/agreement
-
-      # Deduplicate CORS headers that are added by both the gateway (globalcors)
-      # and the individual downstream services (their own Security configs).
-      # Without this, the browser sees the header twice and blocks the request.
-      default-filters:
-        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
-
-      # Disable auto-discovery-based routes; we use explicit routes above.
-      discovery:
-        locator:
-          enabled: false
-
-# ── CORS ────────────────────────────────────────────────────────────────────
-# Driven by CORS_ALLOWED_ORIGINS in .env — add new origins there, no code changes needed
+# ── CORS ─────────────────────────────────────────────────────────────────────
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5000,http://localhost:5174,http://localhost:1819}
 
-# ── Server ──────────────────────────────────────────────────────────────────
+# ── Server ───────────────────────────────────────────────────────────────────
 server:
   port: ${PORT:8080}
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param
+    include-exception: false
   compression:
     enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+  http2:
+    enabled: true
 
-# ── Eureka ──────────────────────────────────────────────────────────────────
+# ── Eureka ───────────────────────────────────────────────────────────────────
 eureka:
   client:
     service-url:
@@ -98,17 +113,21 @@ eureka:
     prefer-ip-address: true
     instance-id: ${spring.application.name}:${random.value}
 
-# ── Circuit Breaker (Resilience4j) ──────────────────────────────────────────
+# ── Twilio ────────────────────────────────────────────────────────────────────
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID}
+  auth-token: ${TWILIO_AUTH_TOKEN}
+  phone-number: ${TWILIO_PHONE_NUMBER}
+
+# ── JWT ──────────────────────────────────────────────────────────────────────
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:604800000}
+
+# ── Circuit Breaker (Resilience4j) ───────────────────────────────────────────
 resilience4j:
   circuitbreaker:
     instances:
-      mainBackend:
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        permittedNumberOfCallsInHalfOpenState: 3
-        waitDurationInOpenState: 15s
-        failureRateThreshold: 50
-        automaticTransitionFromOpenToHalfOpenEnabled: true
       contractFarming:
         slidingWindowSize: 10
         minimumNumberOfCalls: 5
@@ -132,8 +151,6 @@ resilience4j:
         automaticTransitionFromOpenToHalfOpenEnabled: true
   timelimiter:
     instances:
-      mainBackend:
-        timeoutDuration: 10s
       contractFarming:
         timeoutDuration: 10s
       marketAccess:
@@ -141,13 +158,13 @@ resilience4j:
       generateAgreement:
         timeoutDuration: 10s
 
-# ── Swagger / OpenAPI ────────────────────────────────────────────────────────
-# The gateway hosts a single Swagger UI that aggregates docs from all services.
-# Each URL below routes through the gateway's own route table to the downstream
-# service's /v3/api-docs endpoint — no extra configuration needed.
-#
+# ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
+# Single Swagger UI that aggregates API docs from all services.
+# Proxy routes above expose each service's /v3/api-docs endpoint through this gateway.
 # Access at: http://localhost:8080/swagger-ui.html
 springdoc:
+  api-docs:
+    path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
     disable-swagger-default-url: true
@@ -155,29 +172,24 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: alpha
     urls:
-      - name: "Main Backend (Auth & Users)"
-        url: /main/v3/api-docs
-      - name: "Contract Farming (Agreements, Orders, Payments)"
-        url: /contract-farming/v3/api-docs
+      - name: "API Gateway (Auth & Users)"
+        url: /v3/api-docs
       - name: "Market Access (Listings & Images)"
         url: /market/v3/api-docs
+      - name: "Contract Farming (Agreements, Orders, Payments)"
+        url: /contract-farming/v3/api-docs
       - name: "Agreement Generator (Contracts & Cold Storage)"
         url: /agreement/v3/api-docs
-  api-docs:
-    path: /v3/api-docs
 
-# ── Actuator ────────────────────────────────────────────────────────────────
-# /actuator/gateway/routes shows all live routes and their status.
+# ── Actuator ─────────────────────────────────────────────────────────────────
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,gateway
+        include: health,info,metrics,prometheus
   endpoint:
     health:
-      show-details: always
-    gateway:
-      enabled: true
+      show-details: when-authorized
   metrics:
     export:
       prometheus:
@@ -187,8 +199,10 @@ management:
 logging:
   level:
     root: ${LOG_LEVEL_ROOT:INFO}
-    com.agriconnect.gateway: ${LOG_LEVEL_APP:DEBUG}
+    com.agriconnect: ${LOG_LEVEL_APP:DEBUG}
+    org.springframework.web: ${LOG_LEVEL_SPRING_WEB:INFO}
+    org.springframework.security: ${LOG_LEVEL_SPRING_SECURITY:INFO}
+    org.hibernate: ${LOG_LEVEL_HIBERNATE:WARN}
     org.springframework.cloud.gateway: ${LOG_LEVEL_GATEWAY:INFO}
-    io.github.resilience4j: ${LOG_LEVEL_RESILIENCE4J:INFO}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"

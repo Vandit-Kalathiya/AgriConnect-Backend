@@ -42,7 +42,7 @@
 #       TAG=latest                    ← pipeline updates this automatically
 #       GATEWAY_URL=http://<EC2-IP>:8080
 #  4. Service .env files in place:
-#       ~/AgriConnect_Backend/Main-Backend/.env
+#       ~/AgriConnect_Backend/Api-Gateway/.env
 #       ~/AgriConnect_Backend/Contract-Farming-App/.env
 #       ~/AgriConnect_Backend/Market-Access-App/.env
 #       ~/AgriConnect_Backend/Generate-Agreement-App/.env
@@ -78,11 +78,10 @@ jobs:
       matrix:
         include:
           - { service: Eureka-Main-Server,     java: "23" }
-          - { service: Main-Backend,           java: "23" }
+          - { service: Api-Gateway,            java: "23" }
           - { service: Contract-Farming-App,   java: "21" }
           - { service: Market-Access-App,      java: "24" }
           - { service: Generate-Agreement-App, java: "21" }
-          - { service: Api-Gateway,            java: "21" }
 
     steps:
       - name: Checkout repository
@@ -120,11 +119,10 @@ jobs:
       matrix:
         include:
           - { service: Eureka-Main-Server,     image: agriconnect-eureka-server      }
-          - { service: Main-Backend,           image: agriconnect-main-backend       }
+          - { service: Api-Gateway,            image: agriconnect-api-gateway        }
           - { service: Contract-Farming-App,   image: agriconnect-contract-farming   }
           - { service: Market-Access-App,      image: agriconnect-market-access      }
           - { service: Generate-Agreement-App, image: agriconnect-generate-agreement }
-          - { service: Api-Gateway,            image: agriconnect-api-gateway        }
 
     steps:
       - name: Checkout repository
@@ -271,7 +269,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Stage | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Build & Package (6 services) | $(icon $BUILD_RESULT) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build & Package (5 services) | $(icon $BUILD_RESULT) |" >> $GITHUB_STEP_SUMMARY
           echo "| Docker Build & Push          | $(icon $DOCKER_RESULT) |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy to EC2 + Nginx reload | $(icon $DEPLOY_RESULT) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -286,11 +284,10 @@ jobs:
             echo "|-------|------|" >> $GITHUB_STEP_SUMMARY
             for image in \
               agriconnect-eureka-server \
-              agriconnect-main-backend \
+              agriconnect-api-gateway \
               agriconnect-contract-farming \
               agriconnect-market-access \
-              agriconnect-generate-agreement \
-              agriconnect-api-gateway
+              agriconnect-generate-agreement
             do
               echo "| \`${DOCKER_USER}/${image}\` | \`latest\` · \`sha-${SHORT_SHA}\` · \`build-${{ github.run_number }}\` |" >> $GITHUB_STEP_SUMMARY
             done

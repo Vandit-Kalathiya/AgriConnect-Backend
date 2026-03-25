@@ -1,10 +1,12 @@
 package com.agriconnect.Main.Backend.config;
 
 import com.agriconnect.Main.Backend.jwt.JwtAuthenticationFilter;
+import com.agriconnect.Main.Backend.filter.UserIdentityPropagationFilter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -26,35 +28,61 @@ import java.util.List;
 @EnableWebSecurity
 public class UserConfig {
 
-    private final JwtAuthenticationFilter filter;
+    private final JwtAuthenticationFilter jwtFilter;
+    private final UserIdentityPropagationFilter identityFilter;
 
-    @Value("${cors.allowed.origins:http://localhost:5000,http://localhost:5174,http://localhost:1819}")
+    @Value("${cors.allowed-origins:http://localhost:5000,http://localhost:5174,http://localhost:1819}")
     private String allowedOrigins;
 
     @Autowired
-    public UserConfig(JwtAuthenticationFilter filter) {
-        this.filter = filter;
+    public UserConfig(JwtAuthenticationFilter jwtFilter, UserIdentityPropagationFilter identityFilter) {
+        this.jwtFilter = jwtFilter;
+        this.identityFilter = identityFilter;
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable);
 
-        // Enable CORS
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
         http.authorizeHttpRequests(authorize -> {
-            // Protected endpoints
-            authorize.requestMatchers("/api/**", "/faculty/**", "/tasks/**", "/week/**", "/comment/**", "/auth/current-user")
-                    .authenticated();
-            // Public endpoints
-            authorize.anyRequest().permitAll();
+            // Public: Swagger UI + OpenAPI docs (including proxied downstream docs)
+            authorize.requestMatchers(
+                    "/v3/api-docs/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/webjars/**",
+                    "/*/v3/api-docs",
+                    "/*/v3/api-docs/**"
+            ).permitAll();
+
+            // Public: Actuator health probe only
+            authorize.requestMatchers("/actuator/health").permitAll();
+
+            // Public: Auth pre-login flows (OTP registration & login)
+            authorize.requestMatchers(HttpMethod.POST, "/auth/register").permitAll();
+            authorize.requestMatchers(HttpMethod.POST, "/auth/login").permitAll();
+            authorize.requestMatchers(HttpMethod.POST, "/auth/login/after/register").permitAll();
+            authorize.requestMatchers("/auth/r/verify-otp/**").permitAll();
+            authorize.requestMatchers("/auth/verify-otp/**").permitAll();
+
+            // Public: read-only user profile lookups (no sensitive data)
+            authorize.requestMatchers(HttpMethod.GET, "/users/{phone}").permitAll();
+            authorize.requestMatchers(HttpMethod.GET, "/users/unique/{id}").permitAll();
+            authorize.requestMatchers(HttpMethod.GET, "/users/profile-image/{id}").permitAll();
+            authorize.requestMatchers(HttpMethod.GET, "/users/signature-image/{id}").permitAll();
+
+            // Everything else — including all gateway-proxied routes — requires a valid JWT
+            authorize.anyRequest().authenticated();
         });
 
         http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        http.addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class);
-        
+        // JWT filter populates SecurityContext; identity filter adds X-User-Phone to proxied requests
+        http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(identityFilter, JwtAuthenticationFilter.class);
+
         return http.build();
     }
 
@@ -65,21 +93,18 @@ public class UserConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(12); // Strength of 12 for production
+        return new BCryptPasswordEncoder(12);
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        
-        // Parse allowed origins from environment variable
         List<String> origins = Arrays.asList(allowedOrigins.split(","));
         configuration.setAllowedOrigins(origins);
-        
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L); // Cache preflight requests for 1 hour
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
