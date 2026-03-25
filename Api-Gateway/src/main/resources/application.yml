@@ -58,7 +58,7 @@ spring:
               - StripPrefix=1
               - name: CircuitBreaker
                 args:
-                  id: contractFarming
+                  name: contractFarming
                   fallbackUri: forward:/fallback/contract-farming
 
           - id: market-access
@@ -69,7 +69,7 @@ spring:
               - StripPrefix=1
               - name: CircuitBreaker
                 args:
-                  id: marketAccess
+                  name: marketAccess
                   fallbackUri: forward:/fallback/market
 
           - id: generate-agreement
@@ -80,7 +80,7 @@ spring:
               - StripPrefix=1
               - name: CircuitBreaker
                 args:
-                  id: generateAgreement
+                  name: generateAgreement
                   fallbackUri: forward:/fallback/agreement
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
