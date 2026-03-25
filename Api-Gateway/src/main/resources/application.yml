@@ -190,9 +190,9 @@ management:
   endpoint:
     health:
       show-details: when-authorized
-  metrics:
-    export:
-      prometheus:
+  appoptics:
+    metrics:
+      export:
         enabled: true
 
 # ── Logging ──────────────────────────────────────────────────────────────────

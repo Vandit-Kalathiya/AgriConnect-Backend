@@ -14,7 +14,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/coldStorage")
-@CrossOrigin(origins = "http://localhost:5173")
 public class ColdStorageController {
     @Autowired
     private ColdStorageService coldStorageService;

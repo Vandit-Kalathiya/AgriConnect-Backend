@@ -6,6 +6,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
 
+/**
+ * All authentication and authorization is handled centrally by the API Gateway.
+ * CORS is not configured here — it is irrelevant for server-to-server calls from the gateway.
+ */
 @Configuration
 public class Config {
 
