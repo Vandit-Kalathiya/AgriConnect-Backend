@@ -72,6 +72,7 @@ public class UserConfig {
             authorize.requestMatchers(HttpMethod.GET, "/users/unique/{id}").permitAll();
             authorize.requestMatchers(HttpMethod.GET, "/users/profile-image/{id}").permitAll();
             authorize.requestMatchers(HttpMethod.GET, "/users/signature-image/{id}").permitAll();
+            authorize.requestMatchers(HttpMethod.GET, "/users/test").permitAll();
 
             // Everything else — including all gateway-proxied routes — requires a valid JWT
             authorize.anyRequest().authenticated();
