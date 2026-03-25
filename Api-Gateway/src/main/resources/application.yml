@@ -56,10 +56,6 @@ spring:
               - Path=/contract-farming/**
             filters:
               - StripPrefix=1
-              - name: CircuitBreaker
-                args:
-                  name: contractFarming
-                  fallbackUri: forward:/fallback/contract-farming
 
           - id: market-access
             uri: lb://Market-Access-App
@@ -67,10 +63,6 @@ spring:
               - Path=/market/**
             filters:
               - StripPrefix=1
-              - name: CircuitBreaker
-                args:
-                  name: marketAccess
-                  fallbackUri: forward:/fallback/market
 
           - id: generate-agreement
             uri: lb://Generate-Agreement-App
@@ -78,10 +70,6 @@ spring:
               - Path=/agreement/**
             filters:
               - StripPrefix=1
-              - name: CircuitBreaker
-                args:
-                  name: generateAgreement
-                  fallbackUri: forward:/fallback/agreement
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 cors:
