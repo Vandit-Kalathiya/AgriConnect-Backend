@@ -17,7 +17,9 @@ spring:
       idle-timeout: ${DB_IDLE_TIMEOUT:600000}
       max-lifetime: ${DB_MAX_LIFETIME:1800000}
       auto-commit: true
+      initialization-fail-timeout: -1
   jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:update}
     properties:
@@ -56,7 +58,7 @@ spring:
               - StripPrefix=1
               - name: CircuitBreaker
                 args:
-                  name: contractFarming
+                  id: contractFarming
                   fallbackUri: forward:/fallback/contract-farming
 
           - id: market-access
@@ -67,7 +69,7 @@ spring:
               - StripPrefix=1
               - name: CircuitBreaker
                 args:
-                  name: marketAccess
+                  id: marketAccess
                   fallbackUri: forward:/fallback/market
 
           - id: generate-agreement
@@ -78,7 +80,7 @@ spring:
               - StripPrefix=1
               - name: CircuitBreaker
                 args:
-                  name: generateAgreement
+                  id: generateAgreement
                   fallbackUri: forward:/fallback/agreement
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
