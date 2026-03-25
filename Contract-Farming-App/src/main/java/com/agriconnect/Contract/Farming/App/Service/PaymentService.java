@@ -1,6 +1,5 @@
 package com.agriconnect.Contract.Farming.App.Service;
 
-//import com.agriconnect.Contract.Farming.App.AgreementRegistry.AgreementRegistry;
 import com.agriconnect.Contract.Farming.App.Entity.Order;
 import com.agriconnect.Contract.Farming.App.Repository.OrderRepository;
 import com.razorpay.RazorpayClient;
@@ -11,13 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-import org.web3j.protocol.core.methods.response.TransactionReceipt;
-
-import java.math.BigInteger;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.util.List;
 
 @Service
 public class PaymentService {
@@ -36,55 +28,27 @@ public class PaymentService {
     @Autowired
     private OrderRepository orderRepository;
 
-//    @Autowired
-//    private AgreementRegistry agreementRegistry;
-
-    @Autowired
-    private AgreementService agreementService;
-
-//    public void addPaymentDetails(String orderId, String paymentId, Long amount) throws Exception {
-//        TransactionReceipt receipt = agreementRegistry.addPaymentDetails(orderId, paymentId, BigInteger.valueOf(amount)).send();
-//        logger.info("Payment details added to blockchain for hash: {}. Tx Hash: {}", orderId, receipt.getTransactionHash());
-//    }
-
     public String createOrder(String farmerAddress, String buyerAddress, Long amount, String orderId) throws Exception {
-        // Add agreement to blockchain
-//        TransactionReceipt receipt = agreementRegistry.addAgreement(orderId, farmerAddress, buyerAddress).send();
-//        logger.info("Agreement added to blockchain. Tx Hash: {}", receipt.getTransactionHash());
-//
-//        agreementService.uploadAgreement(file, receipt.getTransactionHash(),pdfHash);
-//        logger.info("Agreement added to Database.");
-
-        // Create Razorpay order
         RazorpayClient razorpay = new RazorpayClient(razorpayKeyId, razorpayKeySecret);
         JSONObject orderRequest = new JSONObject();
-        orderRequest.put("amount", amount * 100); // In paise
+        orderRequest.put("amount", amount * 100); // in paise
         orderRequest.put("currency", currency);
-//        orderRequest.put("receipt", "agr_" + pdfHash.substring(0, 8));
-        orderRequest.put("payment_capture", 0); // Manual capture for escrow-like behavior
+        orderRequest.put("payment_capture", 0); // manual capture for escrow-like behaviour
 
         com.razorpay.Order razorpayOrder = razorpay.orders.create(orderRequest);
         String razorpayOrderId = razorpayOrder.get("id");
 
-        // Save order
         Order order = orderRepository.findById(orderId).get();
-//        order.setPdfHash(pdfHash);
-//        order.setFarmerAddress(farmerAddress);
-//        order.setBuyerAddress(buyerAddress);
         order.setAmount(amount);
-//        order.setCurrency(currency);
         order.setRazorpayOrderId(razorpayOrderId);
-//        order.setStatus("created");
-//        order.setCreatedDate(LocalDate.now());
-//        order.setCreatedTime(LocalTime.now());
         orderRepository.save(order);
         return razorpayOrderId;
     }
 
     public void confirmDelivery(String orderId, String trackingNumber) throws Exception {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new EntityNotFoundException("Order not found"));
-        if (order == null || !"paid_pending_delivery".equals(order.getStatus())) {
-            throw new Exception("Order not found or not in payable state");
+        if (!"paid_pending_delivery".equals(order.getStatus())) {
+            throw new Exception("Order not in payable state");
         }
         order.setTrackingNumber(trackingNumber);
         order.setStatus("delivered");
@@ -94,8 +58,8 @@ public class PaymentService {
 
     public Order verifyAndReleasePayment(String orderId) throws Exception {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new EntityNotFoundException("Order not found"));
-        if (order == null || !"delivered".equals(order.getStatus())) {
-            throw new Exception("Order not found or not delivered");
+        if (!"delivered".equals(order.getStatus())) {
+            throw new Exception("Order not delivered");
         }
 
         RazorpayClient razorpay = new RazorpayClient(razorpayKeyId, razorpayKeySecret);
@@ -108,7 +72,6 @@ public class PaymentService {
             order.setStatus("completed");
             orderRepository.save(order);
             logger.info("Payment captured and released for order: {}", order.getRazorpayOrderId());
-
         } else {
             throw new Exception("Payment not authorized");
         }
@@ -116,34 +79,30 @@ public class PaymentService {
     }
 
     public void requestReturn(String orderId, String returnTrackingNumber) throws Exception {
-        System.out.println(orderId);
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new EntityNotFoundException("Order not found"));
-        System.out.println(order.getStatus());
-        if (order == null || !"delivered".equals(order.getStatus())) {
-            throw new Exception("Order not found or not delivered");
+        if (!"delivered".equals(order.getStatus())) {
+            throw new Exception("Order not delivered");
         }
         order.setReturnTrackingNumber(returnTrackingNumber);
         order.setStatus("return_requested");
         orderRepository.save(order);
-//        agreementRegistry.requestReturn(orderId).send();
         logger.info("Return requested for order: {}", order.getRazorpayOrderId());
     }
 
     public void confirmReturn(String orderId) throws Exception {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new EntityNotFoundException("Order not found"));
-        if (order == null || !"return_requested".equals(order.getStatus())) {
-            throw new Exception("Order not found or return not requested");
+        if (!"return_requested".equals(order.getStatus())) {
+            throw new Exception("Return not requested for order");
         }
         order.setStatus("return_confirmed");
         orderRepository.save(order);
-//        agreementRegistry.confirmReturn(orderId).send();
         logger.info("Return confirmed for order: {}", order.getRazorpayOrderId());
     }
 
     public void rejectAndRefundPayment(String orderId) throws Exception {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new EntityNotFoundException("Order not found"));
-        if (order == null || !"return_confirmed".equals(order.getStatus())) {
-            throw new Exception("Order not found or not return confirmed");
+        if (!"return_confirmed".equals(order.getStatus())) {
+            throw new Exception("Return not confirmed for order");
         }
 
         RazorpayClient razorpay = new RazorpayClient(razorpayKeyId, razorpayKeySecret);
@@ -159,7 +118,6 @@ public class PaymentService {
             order.setRazorpayRefundId(refund.get("id"));
             order.setStatus("refunded");
             orderRepository.save(order);
-//            agreementRegistry.recordRefund(orderId, refund.get("id")).send();
             logger.info("Payment refunded for order: {}. Refund ID: {}", order.getRazorpayOrderId(), refund.get("id"));
         } else if ("captured".equals(payment.get("status"))) {
             throw new Exception("Payment already captured, cannot refund directly");

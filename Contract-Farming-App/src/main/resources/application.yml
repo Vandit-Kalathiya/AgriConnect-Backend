@@ -51,14 +51,6 @@ razorpay:
   company:
     name: ${RAZORPAY_COMPANY_NAME:AgriConnect}
 
-blockchain:
-  contract:
-    address: ${CONTRACT_ADDRESS}
-  private:
-    key: ${PRIVATE_KEY}
-  api:
-    url: ${API_URL}
-
 logging:
   level:
     root: ${LOG_LEVEL_ROOT:INFO}

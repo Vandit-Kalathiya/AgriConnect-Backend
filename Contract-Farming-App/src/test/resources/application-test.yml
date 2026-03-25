@@ -1,10 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────
 # Spring profile: test  (activated by SPRING_PROFILES_ACTIVE=test in CI)
 #
-# Razorpay and Blockchain properties use @NotBlank validation.
+# Razorpay properties use @NotBlank validation.
 # Dummy non-blank strings satisfy validation without calling any API.
-# All Web3j/blockchain beans are commented out in BlockChainConfig, so
-# CONTRACT_ADDRESS / PRIVATE_KEY / API_URL are never used at runtime.
 # ─────────────────────────────────────────────────────────────────────
 
 server:
@@ -21,15 +19,6 @@ razorpay:
   key:
     id: ci_dummy_razorpay_id
     secret: ci_dummy_razorpay_secret
-
-# ── Blockchain (beans are commented out — values satisfy @NotBlank) ─
-blockchain:
-  contract:
-    address: "0x0000000000000000000000000000000000000001"
-  private-key-config:
-    key: "0x0000000000000000000000000000000000000000000000000000000000000001"
-  api:
-    url: "http://localhost:8545"
 
 # ── Eureka (fully disabled) ────────────────────────────────────────
 eureka:

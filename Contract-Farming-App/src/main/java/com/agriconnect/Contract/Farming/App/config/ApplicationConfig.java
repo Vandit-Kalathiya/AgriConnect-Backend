@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
 
 @Configuration
-@EnableConfigurationProperties({RazorpayProperties.class, BlockchainProperties.class})
+@EnableConfigurationProperties(RazorpayProperties.class)
 public class ApplicationConfig {
 
     @Bean
