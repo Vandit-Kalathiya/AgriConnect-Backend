@@ -61,6 +61,7 @@ public class UserConfig {
 
             // Public: Auth endpoints — register, login, and password reset
             authorize.requestMatchers(HttpMethod.POST, "/auth/register").permitAll();
+            authorize.requestMatchers(HttpMethod.POST, "/auth/register/verify").permitAll();
             authorize.requestMatchers(HttpMethod.POST, "/auth/login").permitAll();
             authorize.requestMatchers(HttpMethod.POST, "/auth/forgot-password").permitAll();
             authorize.requestMatchers(HttpMethod.POST, "/auth/reset-password").permitAll();

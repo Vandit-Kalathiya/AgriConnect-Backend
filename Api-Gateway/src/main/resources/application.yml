@@ -34,8 +34,8 @@ spring:
     show-sql: ${JPA_SHOW_SQL:false}
   servlet:
     multipart:
-      max-file-size: ${MAX_FILE_SIZE:10MB}
-      max-request-size: ${MAX_REQUEST_SIZE:10MB}
+      max-file-size: ${MAX_FILE_SIZE:25MB}
+      max-request-size: ${MAX_REQUEST_SIZE:60MB}
       enabled: true
 
   # ── Spring Cloud Gateway MVC ─────────────────────────────────────────────
@@ -100,10 +100,11 @@ jwt:
   expiration: ${JWT_EXPIRATION:604800000}
 
 # ── Feature Flags ─────────────────────────────────────────────────────────────
-# FEATURE_MOBILE_VERIFICATION_ENABLED=true  → forgot-password requires both
-#   email OTP AND mobile OTP to reset password.
-# FEATURE_MOBILE_VERIFICATION_ENABLED=false → only email OTP is required.
-# Mirror this flag in the frontend .env as: VITE_FEATURE_MOBILE_VERIFICATION_ENABLED
+# FEATURE_MOBILE_VERIFICATION_ENABLED=true  → registration verify requires
+#   both email OTP and mobile OTP.
+# FEATURE_MOBILE_VERIFICATION_ENABLED=false → registration verify requires
+#   only email OTP.
+# Mirror this flag in frontend .env as: VITE_FEATURE_MOBILE_VERIFICATION_ENABLED
 feature:
   mobile-verification:
     enabled: ${FEATURE_MOBILE_VERIFICATION_ENABLED:true}

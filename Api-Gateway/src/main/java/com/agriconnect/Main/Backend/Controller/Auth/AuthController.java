@@ -1,10 +1,12 @@
 package com.agriconnect.Main.Backend.Controller.Auth;
 
 import com.agriconnect.Main.Backend.DTO.User.FarmerRegisterRequest;
+import com.agriconnect.Main.Backend.DTO.Auth.RegisterVerificationRequest;
 import com.agriconnect.Main.Backend.DTO.Jwt.JwtRequest;
 import com.agriconnect.Main.Backend.DTO.Jwt.JwtResponse;
 import com.agriconnect.Main.Backend.Entity.User.User;
 import com.agriconnect.Main.Backend.Service.Auth.AuthService;
+import com.agriconnect.Main.Backend.Service.Auth.RegistrationVerificationService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -25,23 +27,29 @@ public class AuthController {
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     private final AuthService authService;
+    private final RegistrationVerificationService registrationVerificationService;
 
     @Autowired
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, RegistrationVerificationService registrationVerificationService) {
         this.authService = authService;
+        this.registrationVerificationService = registrationVerificationService;
     }
 
     @PostMapping("/register")
     public ResponseEntity<Map<String, Object>> register(
             @Valid @RequestBody FarmerRegisterRequest farmerRegisterRequest) {
-        logger.info("Registration request for phone: {}", farmerRegisterRequest.getPhoneNumber());
-        User user = authService.registerUser(farmerRegisterRequest);
-        logger.info("User registered successfully: {}", user.getPhoneNumber());
+        logger.info("Registration OTP request for phone: {}", farmerRegisterRequest.getPhoneNumber());
+        Map<String, Object> response = registrationVerificationService.initiateRegistration(farmerRegisterRequest);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/register/verify")
+    public ResponseEntity<Map<String, Object>> verifyAndRegister(
+            @Valid @RequestBody RegisterVerificationRequest request) {
+        logger.info("Registration OTP verification for email: {}", request.getEmail());
+        User user = registrationVerificationService.verifyAndRegister(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(Map.of(
-                        "message", "Registered successfully",
-                        "user", user
-                ));
+                .body(Map.of("message", "Registered successfully", "user", user));
     }
 
     @PostMapping("/login")
