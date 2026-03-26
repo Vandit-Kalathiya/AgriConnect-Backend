@@ -1,10 +1,8 @@
 package com.agriconnect.Main.Backend.security;
 
-
 import com.agriconnect.Main.Backend.Entity.User.User;
 import com.agriconnect.Main.Backend.Repository.User.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -22,11 +20,11 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String phoneNumber) throws UsernameNotFoundException {
         Optional<User> user = userRepository.getUserByPhoneNumber(phoneNumber);
         if (user.isEmpty()) {
-            throw new UsernameNotFoundException("Mobile Number not registered: " + phoneNumber);
+            throw new UsernameNotFoundException("Mobile number not registered: " + phoneNumber);
         }
         return org.springframework.security.core.userdetails.User
                 .withUsername(user.get().getPhoneNumber())
-                .password("")
+                .password(user.get().getPassword())
                 .authorities("USER")
                 .build();
     }

@@ -33,6 +33,9 @@ public class User implements UserDetails {
     private String phoneNumber;
     private String address;
 
+    @Column(unique = true)
+    private String email;
+
     @Column(nullable = false)
     private boolean enabled = false;
 

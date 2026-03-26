@@ -59,12 +59,11 @@ public class UserConfig {
             // Public: Actuator health probe only
             authorize.requestMatchers("/actuator/health").permitAll();
 
-            // Public: Auth pre-login flows (OTP registration & login)
+            // Public: Auth endpoints — register, login, and password reset
             authorize.requestMatchers(HttpMethod.POST, "/auth/register").permitAll();
             authorize.requestMatchers(HttpMethod.POST, "/auth/login").permitAll();
-            authorize.requestMatchers(HttpMethod.POST, "/auth/login/after/register").permitAll();
-            authorize.requestMatchers("/auth/r/verify-otp/**").permitAll();
-            authorize.requestMatchers("/auth/verify-otp/**").permitAll();
+            authorize.requestMatchers(HttpMethod.POST, "/auth/forgot-password").permitAll();
+            authorize.requestMatchers(HttpMethod.POST, "/auth/reset-password").permitAll();
 
             // Public: read-only user profile lookups (no sensitive data)
             authorize.requestMatchers(HttpMethod.GET, "/users/{phone}").permitAll();

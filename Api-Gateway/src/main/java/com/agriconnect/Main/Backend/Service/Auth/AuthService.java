@@ -9,7 +9,6 @@ import com.agriconnect.Main.Backend.Entity.User.User;
 import com.agriconnect.Main.Backend.Repository.Session.SessionRepository;
 import com.agriconnect.Main.Backend.Repository.User.UserRepository;
 import com.agriconnect.Main.Backend.Service.Token.TokenService;
-import com.agriconnect.Main.Backend.Service.Twilio.TwilioOtpService;
 import com.agriconnect.Main.Backend.exception.BadRequestException;
 import com.agriconnect.Main.Backend.exception.ConflictException;
 import com.agriconnect.Main.Backend.exception.ResourceNotFoundException;
@@ -25,6 +24,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -52,7 +52,6 @@ public class AuthService {
     private final TokenService tokenService;
     private final SessionRepository sessionRepository;
     private final UserRepository userRepository;
-    private final TwilioOtpService twilioOtpService;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${jwt.expiration:604800000}")
@@ -65,7 +64,6 @@ public class AuthService {
                        TokenService tokenService,
                        SessionRepository sessionRepository,
                        UserRepository userRepository,
-                       TwilioOtpService twilioOtpService,
                        PasswordEncoder passwordEncoder) {
         this.manager = manager;
         this.jwtHelper = jwtHelper;
@@ -73,7 +71,6 @@ public class AuthService {
         this.tokenService = tokenService;
         this.sessionRepository = sessionRepository;
         this.userRepository = userRepository;
-        this.twilioOtpService = twilioOtpService;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -81,22 +78,23 @@ public class AuthService {
         logger.info("Attempting to register user with phone number: {}", farmerRegisterRequest.getPhoneNumber());
 
         if (farmerRegisterRequest.getPhoneNumber() == null || farmerRegisterRequest.getPhoneNumber().isEmpty()) {
-            logger.error("Registration failed: Phone number is null or empty");
             throw new BadRequestException("Phone number cannot be empty");
         }
 
         if (userRepository.getUserByPhoneNumber(farmerRegisterRequest.getPhoneNumber()).isPresent()) {
-            logger.error("Registration failed: Phone number already exists - {}", farmerRegisterRequest.getPhoneNumber());
             throw new ConflictException("Phone number already registered!");
         }
 
-        String encodedPassword = passwordEncoder.encode(
-            farmerRegisterRequest.getUsername() + farmerRegisterRequest.getPhoneNumber()
-        );
+        if (userRepository.findByEmail(farmerRegisterRequest.getEmail()).isPresent()) {
+            throw new ConflictException("Email already registered!");
+        }
+
+        String encodedPassword = passwordEncoder.encode(farmerRegisterRequest.getPassword());
 
         User farmer = User.builder()
                 .username(farmerRegisterRequest.getUsername())
                 .phoneNumber(farmerRegisterRequest.getPhoneNumber())
+                .email(farmerRegisterRequest.getEmail())
                 .uniqueHexAddress(generateRandomAddress())
                 .address(farmerRegisterRequest.getAddress())
                 .password(encodedPassword)
@@ -110,19 +108,11 @@ public class AuthService {
         return savedUser;
     }
 
-    public static String generateRandomAddress() {
-        StringBuilder address = new StringBuilder("0x");
-        for (int i = 0; i < 40; i++) {
-            address.append(HEX_CHARS.charAt(random.nextInt(HEX_CHARS.length())));
-        }
-        return address.toString();
-    }
-
     public JwtResponse login(JwtRequest jwtRequest, HttpServletResponse response) {
         logger.info("Login attempt for phone number: {}", jwtRequest.getPhoneNumber());
 
         try {
-            this.doAuthenticate(jwtRequest.getPhoneNumber());
+            doAuthenticate(jwtRequest.getPhoneNumber(), jwtRequest.getPassword());
 
             UserDetails userDetails = userDetailsService.loadUserByUsername(jwtRequest.getPhoneNumber());
             String token = jwtHelper.generateToken(jwtRequest.getPhoneNumber());
@@ -133,13 +123,13 @@ public class AuthService {
             tokenService.saveToken(jwtToken);
 
             String sessionId = UUID.randomUUID().toString();
-            this.saveSessionId(userDetails.getUsername(), sessionId);
+            saveSessionId(userDetails.getUsername(), sessionId);
 
             Cookie jwtCookie = new Cookie("jwt_token", token);
-            jwtCookie.setHttpOnly(false); // Changed to true for security
-            jwtCookie.setSecure(false); // Set to true in production with HTTPS
+            jwtCookie.setHttpOnly(false);
+            jwtCookie.setSecure(false);
             jwtCookie.setPath("/");
-            jwtCookie.setMaxAge((int) (jwtExpiration / 1000)); // Convert to seconds
+            jwtCookie.setMaxAge((int) (jwtExpiration / 1000));
             response.addCookie(jwtCookie);
 
             logger.info("User logged in successfully: {}", jwtRequest.getPhoneNumber());
@@ -150,19 +140,19 @@ public class AuthService {
 
         } catch (BadCredentialsException e) {
             logger.error("Login failed for phone number: {} - Invalid credentials", jwtRequest.getPhoneNumber());
-            throw new UnauthorizedException("Invalid phone number or credentials");
+            throw new UnauthorizedException("Invalid phone number or password");
         }
     }
 
-    private void doAuthenticate(String phoneNumber) {
+    private void doAuthenticate(String phoneNumber, String password) {
         try {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(phoneNumber);
-            UsernamePasswordAuthenticationToken authenticationToken = 
-                new UsernamePasswordAuthenticationToken(phoneNumber, null, userDetails.getAuthorities());
-            SecurityContextHolder.getContext().setAuthentication(authenticationToken);
-        } catch (Exception e) {
+            UsernamePasswordAuthenticationToken authToken =
+                    new UsernamePasswordAuthenticationToken(phoneNumber, password);
+            Authentication authentication = manager.authenticate(authToken);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        } catch (BadCredentialsException e) {
             logger.error("Authentication failed for phone number: {}", phoneNumber);
-            throw new BadCredentialsException("Mobile Number is not registered.");
+            throw new BadCredentialsException("Invalid phone number or password");
         }
     }
 
@@ -193,16 +183,12 @@ public class AuthService {
 
     public boolean isValidSessionId(String sessionId) {
         Optional<Session> sessionOpt = sessionRepository.findBySessionId(sessionId);
-
         if (sessionOpt.isPresent()) {
             Session session = sessionOpt.get();
-            // Ensure the session is not expired
             return LocalDateTime.now().isBefore(session.getExpiresAt());
         }
-
         return false;
     }
-
 
     public void saveSessionId(String username, String sessionId) {
         logger.debug("Saving session for user: {}", username);
@@ -215,57 +201,11 @@ public class AuthService {
         logger.debug("Session saved successfully for user: {}", username);
     }
 
-    public void sendRegisterOtp(String mobileNumber) {
-        logger.info("Sending registration OTP to: {}", mobileNumber);
-        
-        if (mobileNumber == null || mobileNumber.isEmpty()) {
-            throw new BadRequestException("Mobile number cannot be empty");
+    public static String generateRandomAddress() {
+        StringBuilder address = new StringBuilder("0x");
+        for (int i = 0; i < 40; i++) {
+            address.append(HEX_CHARS.charAt(random.nextInt(HEX_CHARS.length())));
         }
-        
-        try {
-            twilioOtpService.sendOtp(mobileNumber);
-            logger.info("Registration OTP sent successfully to: {}", mobileNumber);
-        } catch (Exception e) {
-            logger.error("Failed to send registration OTP to: {}", mobileNumber, e);
-            throw new BadRequestException("Failed to send OTP. Please try again.");
-        }
-    }
-
-    public void sendLoginOtp(String mobileNumber) {
-        logger.info("Sending login OTP to: {}", mobileNumber);
-        
-        if (mobileNumber == null || mobileNumber.isEmpty()) {
-            throw new BadRequestException("Mobile number cannot be empty");
-        }
-        
-        Optional<User> user = userRepository.getUserByPhoneNumber(mobileNumber);
-        if (!user.isPresent()) {
-            logger.error("Login OTP request for unregistered number: {}", mobileNumber);
-            throw new ResourceNotFoundException("User", "mobileNumber", mobileNumber);
-        }
-        
-        try {
-            twilioOtpService.sendOtp(mobileNumber);
-            logger.info("Login OTP sent successfully to: {}", mobileNumber);
-        } catch (Exception e) {
-            logger.error("Failed to send login OTP to: {}", mobileNumber, e);
-            throw new BadRequestException("Failed to send OTP. Please try again.");
-        }
-    }
-
-    public JwtResponse verifyAndLogin(String mobileNumber, String otp, HttpServletResponse response) {
-        logger.info("Verifying OTP for: {}", mobileNumber);
-        
-        if (mobileNumber == null || otp == null || otp.isEmpty()) {
-            throw new BadRequestException("Mobile number and OTP are required");
-        }
-        
-        if (twilioOtpService.verifyOtp(mobileNumber, otp)) {
-            logger.info("OTP verified successfully for: {}", mobileNumber);
-            return this.login(JwtRequest.builder().phoneNumber(mobileNumber).build(), response);
-        }
-        
-        logger.error("Invalid OTP provided for: {}", mobileNumber);
-        throw new UnauthorizedException("Invalid or expired OTP");
+        return address.toString();
     }
 }

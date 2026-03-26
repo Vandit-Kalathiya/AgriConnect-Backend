@@ -25,4 +25,12 @@ public class FarmerRegisterRequest {
     @NotBlank(message = "Address is required")
     @Size(min = 10, max = 500, message = "Address must be between 10 and 500 characters")
     private String address;
+
+    @NotBlank(message = "Email is required")
+    @jakarta.validation.constraints.Email(message = "Invalid email format")
+    private String email;
+
+    @NotBlank(message = "Password is required")
+    @Size(min = 8, max = 100, message = "Password must be between 8 and 100 characters")
+    private String password;
 }

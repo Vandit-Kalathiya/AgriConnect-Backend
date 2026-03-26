@@ -42,6 +42,20 @@ spring:
   # Routes are defined programmatically in GatewayRoutesConfig.java with
   # Resilience4j circuit breakers. No YAML routes needed here.
 
+  # ── Email (SMTP) ──────────────────────────────────────────────────────────
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
 # ── CORS ─────────────────────────────────────────────────────────────────────
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5000,http://localhost:5174,http://localhost:1819}
@@ -84,6 +98,15 @@ twilio:
 jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION:604800000}
+
+# ── Feature Flags ─────────────────────────────────────────────────────────────
+# FEATURE_MOBILE_VERIFICATION_ENABLED=true  → forgot-password requires both
+#   email OTP AND mobile OTP to reset password.
+# FEATURE_MOBILE_VERIFICATION_ENABLED=false → only email OTP is required.
+# Mirror this flag in the frontend .env as: VITE_FEATURE_MOBILE_VERIFICATION_ENABLED
+feature:
+  mobile-verification:
+    enabled: ${FEATURE_MOBILE_VERIFICATION_ENABLED:true}
 
 # ── Circuit Breaker (Resilience4j) ───────────────────────────────────────────
 resilience4j:
