@@ -2,6 +2,8 @@ package com.agriconnect.Market.Access.App.ai.repository;
 
 import com.agriconnect.Market.Access.App.ai.entity.AiMessageEntity;
 import com.agriconnect.Market.Access.App.ai.repository.projection.ChatContextProjection;
+import com.agriconnect.Market.Access.App.ai.repository.projection.ChatMessageProjection;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -43,4 +45,38 @@ public interface AiMessageRepository extends JpaRepository<AiMessageEntity, Stri
     );
 
     long deleteByIdIn(List<String> ids);
+
+    @Query(
+            value = """
+                    SELECT
+                        m.sequence_no AS sequenceNo,
+                        m.role AS role,
+                        m.content AS content,
+                        m.source AS source,
+                        m.safety_decision AS safetyDecision,
+                        m.created_at AS createdAt
+                    FROM ai_messages m
+                    INNER JOIN ai_conversations c
+                        ON c.id = m.conversation_ref_id
+                    WHERE c.conversation_id = :conversationId
+                      AND c.user_phone = :userPhone
+                      AND m.endpoint_type = 'CHAT'
+                    ORDER BY m.sequence_no ASC
+                    """,
+            countQuery = """
+                    SELECT COUNT(*)
+                    FROM ai_messages m
+                    INNER JOIN ai_conversations c
+                        ON c.id = m.conversation_ref_id
+                    WHERE c.conversation_id = :conversationId
+                      AND c.user_phone = :userPhone
+                      AND m.endpoint_type = 'CHAT'
+                    """,
+            nativeQuery = true
+    )
+    Page<ChatMessageProjection> findConversationMessagesForUser(
+            @Param("conversationId") String conversationId,
+            @Param("userPhone") String userPhone,
+            Pageable pageable
+    );
 }

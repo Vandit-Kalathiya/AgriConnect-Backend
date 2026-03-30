@@ -14,6 +14,8 @@ Instead, schema changes are versioned and deterministic through Flyway migration
   - Manual rollback: `Api-Gateway/src/main/resources/db/rollback/R20260329_01__jwt_logout_hardening_rollback.sql`
 - `Market-Access-App`
   - Migration: `Market-Access-App/src/main/resources/db/migration/V20260329_01__ai_persistence_tables.sql`
+  - Migration: `Market-Access-App/src/main/resources/db/migration/V20260330_01__ai_chat_and_crop_history_tables.sql`
+  - Migration: `Market-Access-App/src/main/resources/db/migration/V20260330_02__ai_conversation_title.sql`
   - Manual rollback: `Market-Access-App/src/main/resources/db/rollback/R20260329_01__ai_persistence_tables_rollback.sql`
 
 ## Runtime Settings (Required)
@@ -25,6 +27,7 @@ JPA_DDL_AUTO=validate
 FLYWAY_ENABLED=true
 FLYWAY_BASELINE_ON_MIGRATE=true
 FLYWAY_BASELINE_VERSION=0
+FLYWAY_AUTO_REPAIR_ON_VALIDATION_ERROR=true
 ```
 
 ## Migration Lifecycle
@@ -34,6 +37,16 @@ FLYWAY_BASELINE_VERSION=0
 3. Pending `V*` scripts are applied in order.
 4. App starts only after successful migration.
 5. JPA validates schema (`ddl-auto=validate`).
+
+If Flyway validation fails due checksum mismatch, auto-repair can recover automatically when:
+
+- `FLYWAY_AUTO_REPAIR_ON_VALIDATION_ERROR=true`
+
+The app attempts:
+
+1. `migrate`
+2. `repair` (only when validation exception is detected)
+3. `migrate` again
 
 ## Safe Deployment Checklist
 
@@ -74,11 +87,11 @@ Expected Flyway log indicators:
 - `Successfully applied ... migration`
 - service starts normally after migrations
 
-Quick health checks:
+Quick health checks (use your environment's configured base URLs):
 
 ```bash
-curl http://localhost:2527/actuator/health
-curl http://localhost:8080/actuator/health
+curl <MARKET_ACCESS_BASE_URL>/actuator/health
+curl <GATEWAY_BASE_URL>/actuator/health
 ```
 
 ## Verification Queries (PostgreSQL)
@@ -126,14 +139,17 @@ docker compose pull market-access api-gateway
 docker compose up -d --no-deps market-access api-gateway
 
 # 4) Verify health
-curl http://localhost:2527/actuator/health
-curl http://localhost:8080/actuator/health
+curl <MARKET_ACCESS_BASE_URL>/actuator/health
+curl <GATEWAY_BASE_URL>/actuator/health
 ```
 
 ## How AI Persistence Works (Operational Summary)
 
 - Frontend sends `conversationId` with chatbot requests.
 - `Market-Access-App` stores/reuses conversation context in `ai_conversations` + `ai_messages`.
+- Separate history tables are maintained for chat/advisory UX support:
+  - `ai_kisan_mitra_history`
+  - `ai_crop_advisory_history`
 - Recent context window is loaded efficiently using indexed queries.
 - Non-chat AI endpoint interactions are logged compactly for audit/analysis.
 - Scheduled cleanup removes old rows in bounded batches using:
@@ -141,10 +157,12 @@ curl http://localhost:8080/actuator/health
   - `AI_PERSISTENCE_CLEANUP_BATCH_SIZE`
   - `AI_PERSISTENCE_CLEANUP_MAX_BATCHES`
   - `AI_PERSISTENCE_CLEANUP_CRON`
+  - retention policy from `AI_PERSISTENCE_RETENTION_DAYS`
 
 ## Final Operational Notes
 
 - Keep `JPA_DDL_AUTO=validate` in production for both services.
 - Keep Flyway enabled in production and CI.
+- Keep `FLYWAY_AUTO_REPAIR_ON_VALIDATION_ERROR=true` for self-healing restarts after benign checksum drift.
 - Never commit real secrets in `.env` files to source control.
 - Rotate any exposed credentials before go-live.

@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public final class CropAdvisoryDtos {
@@ -47,5 +48,35 @@ public final class CropAdvisoryDtos {
         private List<CropRecommendationItem> crops;
         private AiEnums.SafetyDecision safetyDecision;
         private AiEnums.ResponseSource source;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CropAdvisoryHistoryItem {
+        private String district;
+        private String state;
+        private String soilType;
+        private String season;
+        private String language;
+        private String responsePayload;
+        private String source;
+        private String safetyDecision;
+        private LocalDateTime createdAt;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CropAdvisoryHistoryResponse {
+        private String schemaVersion;
+        private List<CropAdvisoryHistoryItem> history;
+        private int page;
+        private int size;
+        private long totalElements;
+        private int totalPages;
+        private boolean hasMore;
     }
 }

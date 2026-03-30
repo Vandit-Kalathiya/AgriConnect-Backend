@@ -7,12 +7,16 @@ import com.agriconnect.Market.Access.App.ai.entity.AiConversationEntity;
 import com.agriconnect.Market.Access.App.ai.entity.AiMessageEntity;
 import com.agriconnect.Market.Access.App.ai.repository.AiConversationRepository;
 import com.agriconnect.Market.Access.App.ai.repository.AiMessageRepository;
+import com.agriconnect.Market.Access.App.ai.repository.projection.ChatConversationSummaryProjection;
 import com.agriconnect.Market.Access.App.ai.repository.projection.ChatContextProjection;
+import com.agriconnect.Market.Access.App.ai.repository.projection.ChatMessageProjection;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -37,17 +41,31 @@ public class ConversationStoreService {
                     .status("ACTIVE")
                     .build();
         }
-        String resolvedConversationId = ensureConversationId(conversationId);
-        AiConversationEntity conversation = conversationRepository.findByConversationId(resolvedConversationId)
-                .orElseGet(() -> conversationRepository.save(AiConversationEntity.builder()
-                        .conversationId(resolvedConversationId)
-                        .userPhone(userPhone)
-                        .language(language)
-                        .status("ACTIVE")
-                        .build()));
-        if (userPhone != null && !userPhone.isBlank() && !userPhone.equals(conversation.getUserPhone())) {
-            conversation.setUserPhone(userPhone);
-            conversationRepository.save(conversation);
+
+        if (userPhone == null || userPhone.isBlank()) {
+            throw new IllegalArgumentException("Authenticated context is required for chat conversations.");
+        }
+
+        if (conversationId == null || conversationId.isBlank()) {
+            String newConversationId = UUID.randomUUID().toString();
+            return conversationRepository.save(AiConversationEntity.builder()
+                    .conversationId(newConversationId)
+                    .userPhone(userPhone)
+                    .language(language)
+                    .status("ACTIVE")
+                    .build());
+        }
+
+        AiConversationEntity conversation = conversationRepository.findByConversationId(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("Conversation not found for continuation."));
+
+        if (!userPhone.equals(conversation.getUserPhone())) {
+            throw new IllegalArgumentException("Conversation does not belong to authenticated user.");
+        }
+
+        if (language != null && !language.isBlank() && !language.equals(conversation.getLanguage())) {
+            conversation.setLanguage(language);
+            return conversationRepository.save(conversation);
         }
         return conversation;
     }
@@ -80,7 +98,25 @@ public class ConversationStoreService {
                     .build());
         }
         messageRepository.saveAll(rows);
+        touchConversation(conversation);
         return currentMax + rows.size();
+    }
+
+    @Transactional
+    public long appendIncomingMessage(AiConversationEntity conversation, ChatDtos.ChatMessage incoming) {
+        if (!aiProperties.getPersistence().isEnabled() || incoming == null) {
+            return 0;
+        }
+        long currentMax = messageRepository.findMaxSequenceNoByConversationId(conversation.getConversationId());
+        messageRepository.save(AiMessageEntity.builder()
+                .conversation(conversation)
+                .sequenceNo(currentMax + 1)
+                .role(incoming.getRole())
+                .endpointType("CHAT")
+                .content(truncate(safetyPolicyService.redactPii(incoming.getContent())))
+                .build());
+        touchConversation(conversation);
+        return currentMax + 1;
     }
 
     @Transactional(readOnly = true)
@@ -124,6 +160,7 @@ public class ConversationStoreService {
                 .source(source == null ? null : source.name())
                 .safetyDecision(safetyDecision == null ? null : safetyDecision.name())
                 .build());
+        touchConversation(conversation);
     }
 
     @Transactional
@@ -151,6 +188,80 @@ public class ConversationStoreService {
                 .source(source == null ? null : source.name())
                 .safetyDecision(safetyDecision == null ? null : safetyDecision.name())
                 .build());
+        touchConversation(conversation);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ChatConversationSummaryProjection> listUserConversations(String userPhone, int page, int size) {
+        if (!aiProperties.getPersistence().isEnabled() || userPhone == null || userPhone.isBlank()) {
+            return Page.empty();
+        }
+        return conversationRepository.findConversationSummariesByUserPhone(
+                userPhone,
+                PageRequest.of(sanitizePage(page), sanitizeSize(size))
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ChatMessageProjection> listConversationMessages(String userPhone, String conversationId, int page, int size) {
+        if (!aiProperties.getPersistence().isEnabled() || conversationId == null || conversationId.isBlank()) {
+            return Page.empty();
+        }
+        return messageRepository.findConversationMessagesForUser(
+                conversationId,
+                userPhone,
+                PageRequest.of(sanitizePage(page), sanitizeSize(size))
+        );
+    }
+
+    @Transactional
+    public AiConversationEntity renameConversation(String userPhone, String conversationId, String title) {
+        if (!aiProperties.getPersistence().isEnabled()
+                || userPhone == null || userPhone.isBlank()
+                || conversationId == null || conversationId.isBlank()) {
+            return null;
+        }
+        AiConversationEntity conversation = conversationRepository
+                .findByConversationIdAndUserPhone(conversationId, userPhone)
+                .orElse(null);
+        if (conversation == null) {
+            return null;
+        }
+        String sanitizedTitle = title == null ? "" : title.trim();
+        if (sanitizedTitle.length() > 140) {
+            sanitizedTitle = sanitizedTitle.substring(0, 140);
+        }
+        conversation.setTitle(sanitizedTitle);
+        return conversationRepository.save(conversation);
+    }
+
+    @Transactional
+    public long deleteConversation(String userPhone, String conversationId) {
+        if (!aiProperties.getPersistence().isEnabled()
+                || userPhone == null || userPhone.isBlank()
+                || conversationId == null || conversationId.isBlank()) {
+            return 0;
+        }
+        return conversationRepository.deleteByConversationIdAndUserPhone(conversationId, userPhone);
+    }
+
+    private void touchConversation(AiConversationEntity conversation) {
+        if (conversation == null || conversation.getId() == null) {
+            return;
+        }
+        conversation.setUpdatedAt(LocalDateTime.now());
+        conversationRepository.save(conversation);
+    }
+
+    private int sanitizeSize(int size) {
+        if (size <= 0) {
+            return 20;
+        }
+        return Math.min(size, 100);
+    }
+
+    private int sanitizePage(int page) {
+        return Math.max(page, 0);
     }
 
     private String truncate(String value) {

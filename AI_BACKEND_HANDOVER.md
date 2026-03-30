@@ -8,6 +8,14 @@ This repository now includes centralized AI endpoints in `Market-Access-App`:
 - `POST /api/v1/ai/market/recommendations`
 - `POST /api/v1/ai/listing/shelf-life`
 - `POST /api/v1/ai/listing/price-suggestion`
+- `GET /api/v1/ai/chat/conversations`
+- `GET /api/v1/ai/chat/conversations/{conversationId}/messages`
+- `PATCH /api/v1/ai/chat/conversations/{conversationId}/title`
+- `DELETE /api/v1/ai/chat/conversations/{conversationId}`
+- `GET /api/v1/ai/chat/history`
+- `GET /api/v1/ai/crop/history`
+- `DELETE /api/v1/ai/chat/history`
+- `DELETE /api/v1/ai/history/all`
 
 When called through API Gateway these are available at:
 
@@ -40,6 +48,9 @@ When called through API Gateway these are available at:
   - Public chatbot throttling (`AiChatRateLimitFilter`)
   - Correlation IDs (`CorrelationIdFilter`, `X-Correlation-Id`)
 - Existing gateway identity propagation (`X-User-Phone`) is required for non-public AI endpoints
+- Strict thread ownership:
+  - continue chat only with valid `conversationId` owned by authenticated user
+  - create new conversation only when `conversationId` is not provided
 
 ## Response Contract Notes
 
@@ -53,6 +64,12 @@ Chat response includes:
 
 - `text`
 - `conversationId`
+
+Conversation list includes:
+
+- stable `conversationId`
+- conversation `title` (custom title or generated fallback)
+- `lastMessagePreview`
 
 ## Config
 
@@ -69,6 +86,13 @@ Added `application.yml` keys:
 - `ai.chat-history-limit`
 - `ai.cache-ttl-seconds`
 - `ai.chat-public-per-minute`
+- `ai.persistence.enabled`
+- `ai.persistence.context-window`
+- `ai.persistence.retention-days`
+- `ai.persistence.cleanup-enabled`
+- `ai.persistence.cleanup-batch-size`
+- `ai.persistence.cleanup-max-batches`
+- `ai.persistence.cleanup-cron`
 
 ## Frontend Parity Mapping
 
@@ -79,11 +103,15 @@ Added `application.yml` keys:
 - `generateRecommendations()` -> `/api/v1/ai/market/recommendations`
 - `predictShelfLife()` -> `/api/v1/ai/listing/shelf-life`
 - `fetchAiPrice()` -> `/api/v1/ai/listing/price-suggestion`
+- `listConversations()` -> `/api/v1/ai/chat/conversations`
+- `getConversationMessages()` -> `/api/v1/ai/chat/conversations/{conversationId}/messages`
+- `renameConversation()` -> `/api/v1/ai/chat/conversations/{conversationId}/title`
+- `deleteConversation()` -> `/api/v1/ai/chat/conversations/{conversationId}`
+- `deleteAllAiHistory()` -> `/api/v1/ai/history/all`
 
 ## Remaining Production Hardening (next steps)
 
 - Replace in-memory cache with Redis for multi-instance consistency
-- Persist conversations/audit records to DB with retention policy
 - Add strict AI output JSON schema parser for provider payloads
 - Add per-user/day quota limits and cost tracking meters
 - Add canary feature flag at endpoint/model level

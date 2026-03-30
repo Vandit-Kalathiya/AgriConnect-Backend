@@ -1,0 +1,2 @@
+ALTER TABLE ai_conversations
+    ADD COLUMN IF NOT EXISTS title VARCHAR(140);
