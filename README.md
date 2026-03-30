@@ -2,6 +2,8 @@
 
 A production-ready microservices backend for the AgriConnect agricultural platform, built with Spring Boot, Spring Cloud Gateway, and Eureka service discovery.
 
+Key platform capabilities include centralized gateway routing, JWT-based authentication, production-grade logout token revocation, AI-powered market assistance in Market-Access-App (Groq-backed), and persistent AI conversation context for better chatbot continuity.
+
 ---
 
 ## Architecture Overview
@@ -37,11 +39,11 @@ A production-ready microservices backend for the AgriConnect agricultural platfo
 
 | # | Service | Port | Responsibility |
 |---|---------|------|---------------|
-| 1 | **Api-Gateway** | **8080** | Single entry point — routing, CORS, circuit breaker, Swagger UI |
+| 1 | **Api-Gateway** | **8080** | Single entry point — routing, CORS, circuit breaker, Swagger UI, JWT auth/logout |
 | 2 | **Eureka-Main-Server** | 8761 | Service discovery & registry |
 | 3 | **Main-Backend** | 2525 | Authentication, JWT, OTP, user management |
 | 4 | **Contract-Farming-App** | 2526 | Farming contracts, orders, Razorpay payments, blockchain |
-| 5 | **Market-Access-App** | 2527 | Product listings, images, marketplace |
+| 5 | **Market-Access-App** | 2527 | Product listings, images, marketplace, AI orchestration (chat/advisory/market/listing), AI persistence |
 | 6 | **Generate-Agreement-App** | 2529 | PDF contract generation, cold storage, email |
 
 > **All client traffic goes through port 8080 (the gateway). Never call service ports directly from the frontend.**
@@ -188,6 +190,35 @@ cd Api-Gateway            && mvn spring-boot:run
 
 ---
 
+## Database Migrations (Production)
+
+This repository is migration-ready with Flyway for services that received schema changes:
+
+- `Market-Access-App`:
+  - `db/migration/V20260329_01__ai_persistence_tables.sql`
+- `Api-Gateway`:
+  - `db/migration/V20260329_01__jwt_logout_hardening.sql`
+
+Recommended production settings:
+
+- `FLYWAY_ENABLED=true`
+- `FLYWAY_BASELINE_ON_MIGRATE=true`
+- `FLYWAY_BASELINE_VERSION=0`
+- `JPA_DDL_AUTO=validate`
+
+Deployment order:
+
+1. Back up database
+2. Deploy app build with Flyway enabled
+3. Let Flyway apply versioned scripts
+4. Verify `flyway_schema_history` and service health
+
+Do not rely on `ddl-auto=update` in production.
+
+Detailed runbook: **[PRODUCTION_DB_MIGRATION_GUIDE.md](PRODUCTION_DB_MIGRATION_GUIDE.md)**
+
+---
+
 ## API Access
 
 ### All requests go through the gateway on port 8080
@@ -210,6 +241,30 @@ Individual service docs (for internal use):
 - http://localhost:2526/swagger-ui.html — Contract Farming
 - http://localhost:2527/swagger-ui.html — Market Access
 - http://localhost:2529/swagger-ui.html — Generate Agreement
+
+---
+
+## Security: Logout Lifecycle
+
+`POST /main/auth/logout` uses a production-style, ordered logout pipeline:
+
+1. **Blacklist token first** to immediately block replay
+2. **Mark token/session expired** in persistence (targeted user/token only; no global session wipe)
+3. **Clear auth cookie** (`jwt_token`) from the client
+
+This flow is idempotent and supports header/cookie token extraction, helping ensure safe logout behavior across web and API clients.
+
+---
+
+## Market-Access AI Features
+
+Market-Access-App now hosts backend AI orchestration endpoints (via gateway `/market/api/v1/ai/**`) with:
+
+- Groq SDK provider integration (no frontend LLM key usage)
+- Centralized safety/domain controls and fallback responses
+- Conversation-aware chat responses using persisted DB history
+- Persistence for chat messages plus non-chat AI interaction logs
+- Configurable retention and scheduled batched cleanup for old AI logs
 
 ---
 

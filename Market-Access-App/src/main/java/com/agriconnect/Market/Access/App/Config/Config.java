@@ -1,5 +1,7 @@
 package com.agriconnect.Market.Access.App.Config;
 
+import com.agriconnect.Market.Access.App.ai.config.AiProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -11,6 +13,7 @@ import org.springframework.security.web.SecurityFilterChain;
  * CORS is not configured here — it is irrelevant for server-to-server calls from the gateway.
  */
 @Configuration
+@EnableConfigurationProperties(AiProperties.class)
 public class Config {
 
     @Bean

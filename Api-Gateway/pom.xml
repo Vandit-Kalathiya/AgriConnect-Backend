@@ -32,11 +32,16 @@
 		<lombok.version>1.18.38</lombok.version>
 		<maven.compiler.proc>full</maven.compiler.proc>
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+		<flyway.version>10.10.0</flyway.version>
 	</properties>
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -137,6 +142,10 @@
 		<dependency>
 			<groupId>org.webjars</groupId>
 			<artifactId>webjars-locator-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
 
 		<!-- Micrometer for metrics -->
