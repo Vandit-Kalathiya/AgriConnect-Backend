@@ -88,7 +88,9 @@ server:
   compression:
     enabled: true
   http2:
-    enabled: true
+    # Internal service behind Api-Gateway — HTTP/2 disabled to avoid
+    # ":status" pseudo-header issues when Nginx proxies via HTTP/1.1.
+    enabled: false
 
 eureka:
   client:

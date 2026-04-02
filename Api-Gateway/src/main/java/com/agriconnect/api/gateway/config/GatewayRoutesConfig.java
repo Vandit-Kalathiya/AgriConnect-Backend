@@ -18,15 +18,6 @@ import static org.springframework.cloud.gateway.server.mvc.predicate.GatewayRequ
 public class GatewayRoutesConfig {
 
     @Bean
-    public RouterFunction<ServerResponse> notificationServiceOpenApiRoute() {
-        return GatewayRouterFunctions.route("notification-service-openapi")
-                .route(path("/notifications/v3/api-docs/**"), HandlerFunctions.http())
-                .filter(LoadBalancerFilterFunctions.lb("Notification-Service"))
-                .before(BeforeFilterFunctions.stripPrefix(1))
-                .build();
-    }
-
-    @Bean
     public RouterFunction<ServerResponse> contractFarmingRoute() {
         return GatewayRouterFunctions.route("contract-farming-cb")
                 .route(path("/contract-farming/**"), HandlerFunctions.http())
