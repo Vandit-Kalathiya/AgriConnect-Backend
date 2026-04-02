@@ -22,7 +22,7 @@
         <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
         <flyway.version>10.10.0</flyway.version>
         <confluent.version>7.7.1</confluent.version>
-        <avro.version>1.11.3</avro.version>
+        <avro.version>1.12.1</avro.version>
         <twilio.version>10.6.10</twilio.version>
         <firebase.version>9.4.1</firebase.version>
         <logstash-encoder.version>8.0</logstash-encoder.version>
