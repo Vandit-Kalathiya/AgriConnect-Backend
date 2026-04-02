@@ -86,6 +86,15 @@ notification:
   topics:
     agreement: agriconnect.notifications.agreement
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
 ---
 # ── Production-Secure profile — SASL_SSL ─────────────────────────────────────
 spring:
@@ -102,15 +111,6 @@ spring:
         password="${KAFKA_PASSWORD}";
       ssl.truststore.location: ${KAFKA_TRUSTSTORE_LOCATION:/certs/kafka.truststore.jks}
       ssl.truststore.password: ${KAFKA_TRUSTSTORE_PASSWORD}
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics,prometheus
-  endpoint:
-    health:
-      show-details: when-authorized
 
 springdoc:
   api-docs:
