@@ -58,6 +58,7 @@ public class UserConfig {
 
             // Public: only health + prometheus for container checks and scraping
             authorize.requestMatchers("/actuator/health", "/actuator/prometheus").permitAll();
+            authorize.requestMatchers("/fallback/**", "/error").permitAll();
 
             // Public: Auth endpoints — register, login, and password reset
             authorize.requestMatchers(HttpMethod.POST, "/auth/register").permitAll();
@@ -119,6 +120,11 @@ public class UserConfig {
         source.registerCorsConfiguration("/contract-farming/**", configuration);
         source.registerCorsConfiguration("/agreement/**", configuration);
         source.registerCorsConfiguration("/notifications/api/**", configuration);
+        source.registerCorsConfiguration("/notifications/v3/api-docs/**", configuration);
+        // Include fallback/error paths so upstream failures still return CORS headers
+        // (otherwise browser reports opaque CORS error instead of real 5xx payload).
+        source.registerCorsConfiguration("/fallback/**", configuration);
+        source.registerCorsConfiguration("/error", configuration);
         source.registerCorsConfiguration("/v3/api-docs/**", configuration);
         source.registerCorsConfiguration("/swagger-ui/**", configuration);
         source.registerCorsConfiguration("/swagger-ui.html", configuration);
