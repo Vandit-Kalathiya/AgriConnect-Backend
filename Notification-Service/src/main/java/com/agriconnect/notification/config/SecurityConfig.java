@@ -25,9 +25,8 @@ public class SecurityConfig {
         http
             .csrf(AbstractHttpConfigurer::disable)
             .cors(AbstractHttpConfigurer::disable)   // Gateway handles CORS — do NOT re-add here
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/ws/**", "/ws/info/**").permitAll()
-                .anyRequest().permitAll()
+            .authorizeHttpRequests(auth ->
+                    auth.anyRequest().permitAll()
             );
         return http.build();
     }
