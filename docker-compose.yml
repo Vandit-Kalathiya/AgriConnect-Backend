@@ -46,6 +46,8 @@ services:
     depends_on:
       eureka-server:
         condition: service_healthy
+      notification-service:
+        condition: service_healthy
       market-access:
         condition: service_healthy
       contract-farming:

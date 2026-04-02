@@ -63,6 +63,7 @@ eureka:
     register-with-eureka: true
     fetch-registry: true
   instance:
+    appname: Market-Access-App
     prefer-ip-address: true
     instance-id: ${spring.application.name}:${random.value}
 

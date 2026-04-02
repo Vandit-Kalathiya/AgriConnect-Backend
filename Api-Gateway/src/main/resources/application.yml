@@ -106,7 +106,9 @@ eureka:
       defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
     register-with-eureka: true
     fetch-registry: true
-    registry-fetch-interval-seconds: 30
+    # Fetch registry more frequently to reduce startup-time gaps where
+    # downstream services are up but not yet visible to the gateway LB cache.
+    registry-fetch-interval-seconds: 5
   instance:
     lease-renewal-interval-in-seconds: 30
     lease-expiration-duration-in-seconds: 90

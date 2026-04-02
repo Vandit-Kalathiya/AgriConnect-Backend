@@ -98,6 +98,7 @@ eureka:
     fetch-registry: true
     registry-fetch-interval-seconds: 30
   instance:
+    appname: Notification-Service
     prefer-ip-address: true
     instance-id: ${spring.application.name}:${random.value}
 
