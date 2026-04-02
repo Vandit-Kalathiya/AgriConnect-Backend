@@ -49,4 +49,15 @@ public class GatewayRoutesConfig {
                         URI.create("forward:/fallback/agreement")))
                 .build();
     }
+
+    @Bean
+    public RouterFunction<ServerResponse> notificationServiceRoute() {
+        return GatewayRouterFunctions.route("notification-service-cb")
+                .route(path("/notifications/**"), HandlerFunctions.http())
+                .filter(LoadBalancerFilterFunctions.lb("Notification-Service"))
+                .before(BeforeFilterFunctions.stripPrefix(1))
+                .filter(CircuitBreakerFilterFunctions.circuitBreaker("notificationService",
+                        URI.create("forward:/fallback/notifications")))
+                .build();
+    }
 }

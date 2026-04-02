@@ -14,6 +14,8 @@ import com.agriconnect.api.gateway.exception.ConflictException;
 import com.agriconnect.api.gateway.exception.ResourceNotFoundException;
 import com.agriconnect.api.gateway.exception.UnauthorizedException;
 import com.agriconnect.api.gateway.jwt.JwtAuthenticationHelper;
+import com.agriconnect.api.gateway.kafka.NotificationEventPublisher;
+import com.agriconnect.notification.avro.Priority;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -33,7 +35,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -53,9 +58,13 @@ public class AuthService {
     private final SessionRepository sessionRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final NotificationEventPublisher notificationEventPublisher;
 
     @Value("${jwt.expiration:604800000}")
     private Long jwtExpiration;
+
+    @Value("${notification.topics.auth}")
+    private String authTopic;
 
     @Autowired
     public AuthService(AuthenticationManager manager,
@@ -64,7 +73,8 @@ public class AuthService {
                        TokenService tokenService,
                        SessionRepository sessionRepository,
                        UserRepository userRepository,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder,
+                       NotificationEventPublisher notificationEventPublisher) {
         this.manager = manager;
         this.jwtHelper = jwtHelper;
         this.userDetailsService = userDetailsService;
@@ -72,6 +82,7 @@ public class AuthService {
         this.sessionRepository = sessionRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.notificationEventPublisher = notificationEventPublisher;
     }
 
     public User registerUser(FarmerRegisterRequest farmerRegisterRequest) {
@@ -135,6 +146,32 @@ public class AuthService {
             response.addCookie(jwtCookie);
 
             logger.info("User logged in successfully: {}", jwtRequest.getPhoneNumber());
+
+            // Publish login notification (in-app only to avoid spam)
+            try {
+                User loggedInUser = userRepository.getUserByPhoneNumber(jwtRequest.getPhoneNumber()).orElse(null);
+                if (loggedInUser != null) {
+                    notificationEventPublisher.publish(authTopic,
+                        notificationEventPublisher.buildEvent(
+                            "AUTH_NEW_DEVICE_LOGIN",
+                            loggedInUser.getId(),
+                            "auth.new.device.login",
+                            List.of("IN_APP"),
+                            Map.of(
+                                "loginAt", Instant.now().toString(),
+                                "userName", loggedInUser.getUsername() != null ? loggedInUser.getUsername() : "Farmer"
+                            ),
+                            Priority.NORMAL,
+                            "login-" + loggedInUser.getId(),
+                            loggedInUser.getEmail(),
+                            loggedInUser.getPhoneNumber()
+                        )
+                    );
+                }
+            } catch (Exception ex) {
+                logger.warn("[NOTIFY] Failed to publish AUTH_NEW_DEVICE_LOGIN: {}", ex.getMessage());
+            }
+
             return JwtResponse.builder()
                     .jwtToken(token)
                     .role("USER")

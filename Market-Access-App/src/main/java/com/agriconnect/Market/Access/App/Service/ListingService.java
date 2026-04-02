@@ -8,19 +8,24 @@ import com.agriconnect.Market.Access.App.Repository.ImageRepository;
 import com.agriconnect.Market.Access.App.Repository.ListingRepository;
 import com.agriconnect.Market.Access.App.exception.BadRequestException;
 import com.agriconnect.Market.Access.App.exception.ResourceNotFoundException;
+import com.agriconnect.Market.Access.App.kafka.NotificationEventPublisher;
+import com.agriconnect.notification.avro.Priority;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -31,10 +36,17 @@ public class ListingService {
 
     private final ListingRepository listingRepository;
     private final ImageRepository imageRepository;
+    private final NotificationEventPublisher notificationEventPublisher;
 
-    public ListingService(ListingRepository listingRepository, ImageRepository imageRepository) {
+    @Value("${notification.topics.market}")
+    private String marketTopic;
+
+    public ListingService(ListingRepository listingRepository,
+                          ImageRepository imageRepository,
+                          NotificationEventPublisher notificationEventPublisher) {
         this.listingRepository = listingRepository;
         this.imageRepository = imageRepository;
+        this.notificationEventPublisher = notificationEventPublisher;
     }
 
     public Listing addListing(ListingRequest listingRequest, List<MultipartFile> images) {
@@ -107,7 +119,30 @@ public class ListingService {
 
             // Update listing with images
             listing = listingRepository.save(listing);
-            
+
+            try {
+                notificationEventPublisher.publish(marketTopic,
+                    notificationEventPublisher.buildEvent(
+                        "MARKET_LISTING_CREATED",
+                        listing.getContactOfFarmer(),
+                        "market.listing.created",
+                        List.of("IN_APP", "EMAIL"),
+                        Map.of(
+                            "listingId",   listing.getId(),
+                            "cropName",    listing.getProductName(),
+                            "quantity",    listing.getQuantity() + " " + (listing.getUnitOfQuantity() != null ? listing.getUnitOfQuantity() : ""),
+                            "listingDate", Instant.now().toString()
+                        ),
+                        Priority.NORMAL,
+                        listing.getId(),
+                        null,
+                        listing.getContactOfFarmer()
+                    )
+                );
+            } catch (Exception ex) {
+                log.warn("[NOTIFY] Failed to publish MARKET_LISTING_CREATED for listing={}: {}", listing.getId(), ex.getMessage());
+            }
+
             log.info("Listing added successfully with ID: {}", listing.getId());
             return listing;
 
@@ -232,6 +267,28 @@ public class ListingService {
         }
 
         listingRepository.deleteById(listingId);
+
+        try {
+            notificationEventPublisher.publish(marketTopic,
+                notificationEventPublisher.buildEvent(
+                    "MARKET_LISTING_DELETED",
+                    listing.getContactOfFarmer(),
+                    "market.listing.deleted",
+                    List.of("IN_APP"),
+                    Map.of(
+                        "listingId", listingId,
+                        "cropName",  listing.getProductName()
+                    ),
+                    Priority.LOW,
+                    listingId,
+                    null,
+                    listing.getContactOfFarmer()
+                )
+            );
+        } catch (Exception ex) {
+            log.warn("[NOTIFY] Failed to publish MARKET_LISTING_DELETED for listing={}: {}", listingId, ex.getMessage());
+        }
+
         log.info("Listing deleted successfully with ID: {}", listingId);
     }
 
@@ -256,6 +313,35 @@ public class ListingService {
         
         Listing updated = listingRepository.save(existingListing);
         log.info("Listing status updated successfully for ID: {}", listingId);
+
+        try {
+            boolean isSold = updatedQuantity <= 0;
+            String eventType = isSold ? "MARKET_LISTING_SOLD" : "MARKET_LISTING_QUANTITY_UPDATED";
+            String templateId = isSold ? "market.listing.sold" : "market.listing.quantity";
+            Priority priority = isSold ? Priority.HIGH : Priority.NORMAL;
+
+            notificationEventPublisher.publish(marketTopic,
+                notificationEventPublisher.buildEvent(
+                    eventType,
+                    updated.getContactOfFarmer(),
+                    templateId,
+                    isSold ? List.of("EMAIL", "IN_APP") : List.of("IN_APP"),
+                    Map.of(
+                        "listingId",     updated.getId(),
+                        "cropName",      updated.getProductName(),
+                        "purchasedQty",  String.valueOf(quantityValue),
+                        "remainingQty",  String.valueOf(updated.getQuantity())
+                    ),
+                    priority,
+                    listingId,
+                    null,
+                    updated.getContactOfFarmer()
+                )
+            );
+        } catch (Exception ex) {
+            log.warn("[NOTIFY] Failed to publish listing status event for listing={}: {}", listingId, ex.getMessage());
+        }
+
         return updated;
     }
 

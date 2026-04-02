@@ -26,11 +26,27 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:true}
     baseline-version: ${FLYWAY_BASELINE_VERSION:0}
+    table: flyway_schema_history_market_access
   servlet:
     multipart:
       max-file-size: ${MAX_FILE_SIZE:10MB}
       max-request-size: ${MAX_REQUEST_SIZE:10MB}
       enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      retries: 5
+      retry-backoff-ms: 1000
+      enable-idempotence: true
+      compression-type: lz4
+      batch-size: 32768
+      linger-ms: 5
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+    properties:
+      schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
+      transactional.id: ${spring.application.name}-tx
 
 server:
   port: ${PORT:2527}
@@ -56,6 +72,27 @@ logging:
     com.agriconnect: ${LOG_LEVEL_APP:DEBUG}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%X{correlationId:-}] - %logger{36} - %msg%n"
+
+notification:
+  topics:
+    market: agriconnect.notifications.market
+
+---
+# ── Production-Secure profile — SASL_SSL ─────────────────────────────────────
+spring:
+  config:
+    activate:
+      on-profile: prod-secure
+  kafka:
+    properties:
+      security.protocol: SASL_SSL
+      sasl.mechanism: SCRAM-SHA-512
+      sasl.jaas.config: >
+        org.apache.kafka.common.security.scram.ScramLoginModule required
+        username="${KAFKA_USERNAME}"
+        password="${KAFKA_PASSWORD}";
+      ssl.truststore.location: ${KAFKA_TRUSTSTORE_LOCATION:/certs/kafka.truststore.jks}
+      ssl.truststore.password: ${KAFKA_TRUSTSTORE_PASSWORD}
 
 management:
   endpoints:
@@ -96,3 +133,4 @@ ai:
     cleanup-batch-size: ${AI_PERSISTENCE_CLEANUP_BATCH_SIZE:1000}
     cleanup-max-batches: ${AI_PERSISTENCE_CLEANUP_MAX_BATCHES:5}
     cleanup-cron: ${AI_PERSISTENCE_CLEANUP_CRON:0 0 3 * * *}
+

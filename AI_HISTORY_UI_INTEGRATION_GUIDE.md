@@ -402,13 +402,13 @@ src/
 
 ## 5) Integration Checklist
 
-- [ ] Ensure `X-User-Phone` header is always attached after login.
-- [ ] Set `REACT_APP_API_BASE_URL` correctly.
-- [ ] Call separate endpoints in separate screens/tabs.
-- [ ] Handle pagination with `page`, `size`, `hasMore`.
-- [ ] Add robust empty/error/loading states.
-- [ ] Verify history isolation across 2 different user accounts.
-- [ ] Confirm backend Flyway migration has run in target DB.
+- Ensure `X-User-Phone` header is always attached after login.
+- Set `REACT_APP_API_BASE_URL` correctly.
+- Call separate endpoints in separate screens/tabs.
+- Handle pagination with `page`, `size`, `hasMore`.
+- Add robust empty/error/loading states.
+- Verify history isolation across 2 different user accounts.
+- Confirm backend Flyway migration has run in target DB.
 
 ---
 
@@ -822,12 +822,12 @@ Examples:
 
 ### Professional polish checklist
 
-- [ ] Skeleton loader matches current theme shades
-- [ ] Empty states have clear CTA
-- [ ] Sticky tabs do not hide content behind notch/safe area
-- [ ] Chips and badges use your existing token palette
-- [ ] Time displayed as relative in list + absolute in details
-- [ ] Bottom sheet closes with swipe + backdrop tap
+- Skeleton loader matches current theme shades
+- Empty states have clear CTA
+- Sticky tabs do not hide content behind notch/safe area
+- Chips and badges use your existing token palette
+- Time displayed as relative in list + absolute in details
+- Bottom sheet closes with swipe + backdrop tap
 
 ---
 
@@ -1141,12 +1141,12 @@ Only do this after confirming:
 
 ### Minimal-risk production rollout checklist
 
-- [ ] DB backup/snapshot created
-- [ ] Read paths confirmed on `ai_conversations` + `ai_messages`
-- [ ] UI switched to conversation APIs
-- [ ] Cleanup SQL tested on staging with realistic data volume
-- [ ] Observability check (API p95, DB CPU, lock wait)
-- [ ] Execute cleanup in controlled window
+- DB backup/snapshot created
+- Read paths confirmed on `ai_conversations` + `ai_messages`
+- UI switched to conversation APIs
+- Cleanup SQL tested on staging with realistic data volume
+- Observability check (API p95, DB CPU, lock wait)
+- Execute cleanup in controlled window
 
 ---
 

@@ -1,6 +1,6 @@
 # Production Deployment Checklist
 
-> **Last updated:** February 2026 — includes API Gateway, Swagger UI, and circuit breaker items.
+> **Last updated:** April 2026 — includes Kafka, Schema Registry, Notification-Service, Ws-Gateway, and WebSocket items.
 
 ## Pre-Deployment Security
 
@@ -15,6 +15,10 @@
 - [ ] Blockchain private keys are secured (consider using KMS)
 - [ ] No `.env` files are committed to Git (verify with `git ls-files | grep .env`)
 - [ ] `GATEWAY_URL` is set to the production public URL (e.g. `https://api.yourdomain.com`) in root `.env` and all service environments
+- [ ] `KAFKA_BOOTSTRAP_SERVERS` is set to production Kafka broker addresses in all producer/consumer services
+- [ ] `SCHEMA_REGISTRY_URL` is set to production Schema Registry URL in all producer/consumer services
+- [ ] `KAFKA_CONSUMER_GROUP_ID` is set correctly in `Notification-Service`
+- [ ] `WS_GATEWAY_CORS_ALLOWED_ORIGINS` includes production frontend domain in `Ws-Gateway/.env`
 
 ### Database Configuration
 - [ ] Database is set up with proper user permissions
@@ -62,8 +66,8 @@
 
 ### Server Configuration
 - [ ] Firewall rules are configured (allow only necessary ports)
-- [ ] **Only port 8080 (gateway) is publicly exposed** — all other service ports are internal only
-- [ ] Ports 2525, 2526, 2527, 2529, 8761 are blocked from external access
+- [ ] **Only port 8080 (Api-Gateway) and 8081 (Ws-Gateway) are publicly exposed** — all other service ports are internal only
+- [ ] Ports 2530, 2526, 2527, 2529, 8761 are blocked from external access
 - [ ] SSH access is secured (key-based authentication, no root login)
 - [ ] Server has adequate resources (CPU, RAM, Disk)
 - [ ] Swap space is configured
@@ -71,13 +75,40 @@
 
 ### API Gateway
 - [ ] Api-Gateway service is running and healthy (`/actuator/health`)
-- [ ] All 4 routes are active (`/actuator/gateway/routes`)
+- [ ] All routes are active (`/actuator/gateway/routes`) — expected: main, contract, agreement, market, notifications
 - [ ] `GATEWAY_URL` env variable points to the public-facing gateway URL
-- [ ] Gateway port (8080) is the **only** backend port exposed to the public internet
-- [ ] Service ports (2525, 2526, 2527, 2529, 8761) are firewall-blocked from external access
+- [ ] Gateway port (8080) is the **only** backend HTTP port exposed to the public internet
+- [ ] Service ports (2526, 2527, 2529, 2530, 8761) are firewall-blocked from external access
 - [ ] Circuit breaker thresholds are tuned for production load
 - [ ] `DedupeResponseHeader` filter is in `default-filters` (prevents duplicate CORS headers)
 - [ ] Swagger UI is either disabled or access-restricted in production (`springdoc.swagger-ui.enabled=false`)
+- [ ] CORS `allowed-origins` is restricted to production frontend domains
+
+### Ws-Gateway (WebSocket Gateway)
+- [ ] Ws-Gateway service is running and healthy (`/actuator/health`)
+- [ ] Ws-Gateway port (8081) is the **only** WebSocket port exposed to the public internet
+- [ ] Route `ws://Ws-Gateway/notifications/ws/**` correctly proxies to `Notification-Service`
+- [ ] `globalcors` in `application.yml` includes only production frontend domains
+- [ ] `CORS_ALLOWED_ORIGINS` env variable is set to production frontend domain
+
+### Kafka and Schema Registry
+- [ ] Kafka broker is running and accessible from all producer/consumer services
+- [ ] Schema Registry is running and accessible
+- [ ] All Avro schemas are registered in Schema Registry (`agriconnect.notifications.*-value`)
+- [ ] All four notification topics exist: `auth`, `market`, `contract`, `agreement`
+- [ ] DLQ topic `agriconnect.notifications.dlq` exists
+- [ ] Kafka is NOT exposed to the public internet (internal network only)
+- [ ] Kafka `KAFKA_BOOTSTRAP_SERVERS` in all `.env` files points to production broker
+
+### Notification-Service
+- [ ] Notification-Service is running and registered in Eureka
+- [ ] Kafka consumer is connected and consuming from all four topics
+- [ ] Email dispatcher is configured and can send emails
+- [ ] SMS dispatcher is configured (Twilio credentials set)
+- [ ] Push dispatcher is configured (Firebase credentials set, or gracefully disabled)
+- [ ] In-App dispatcher is saving to PostgreSQL and pushing over WebSocket
+- [ ] DLQ topic is being monitored (no unexpected failed events)
+- [ ] Notification-Service port (2530) is firewall-blocked from external access
 
 ### Eureka Server
 - [ ] Eureka server is running and accessible
@@ -176,14 +207,20 @@
 
 ### Functional Testing
 - [ ] All API endpoints have been tested
-- [ ] User registration flow is working
-- [ ] User login flow is working
-- [ ] OTP sending and verification is working
-- [ ] Payment integration is working (with test transactions)
+- [ ] User registration flow is working (welcome email sent, `AUTH_WELCOME` notification fired)
+- [ ] User login flow is working (`AUTH_NEW_DEVICE_LOGIN` notification fired)
+- [ ] OTP sending and verification is working (registration OTP uses welcome email template)
+- [ ] Password reset flow working (`AUTH_PASSWORD_RESET_SUCCESS` notification fired)
+- [ ] Profile update notifications firing (`AUTH_PROFILE_UPDATED` in-app notification)
+- [ ] Payment integration is working (with test transactions, `CONTRACT_PAYMENT_SUCCESS` notification fired)
 - [ ] PDF generation is working
-- [ ] Email sending is working
+- [ ] Email sending is working (SMTP credentials valid)
 - [ ] File upload/download is working
 - [ ] Blockchain integration is working (if applicable)
+- [ ] Kafka notification events appear in topics after business actions
+- [ ] Notification-Service consumes events and saves to PostgreSQL
+- [ ] WebSocket push delivered to connected UI clients in real time
+- [ ] DLQ topic remains empty during normal operations
 
 ### Integration Testing
 - [ ] Service-to-service communication is working
@@ -234,16 +271,20 @@
 
 ## Post-Deployment
 
-### Smoke Testing
+### Post-Deployment Smoke Testing
 - [ ] All services are running
-- [ ] All services are registered with Eureka (`http://gateway:8080/actuator/gateway/routes`)
+- [ ] All services are registered with Eureka
 - [ ] Gateway health check returns UP (`/actuator/health`)
-- [ ] All 4 gateway routes are active
+- [ ] All gateway routes are active (main, contract, agreement, market, notifications)
 - [ ] Sample API requests through the gateway succeed (`/main/auth/login`, `/market/listings/all/active`)
-- [ ] User can register successfully
+- [ ] Notification REST API responds (`/notifications/api/notifications/unread-count`)
+- [ ] WebSocket connection via Ws-Gateway succeeds (`ws://localhost:8081/notifications/ws`)
+- [ ] User can register successfully and receives welcome email
 - [ ] User can login successfully
 - [ ] Critical features work end-to-end
 - [ ] Circuit breaker fallback returns 503 JSON when a service is stopped (spot check)
+- [ ] Kafka notification event appears in topic after login
+- [ ] Notification-Service DLQ topic is empty
 
 ### Monitoring Setup
 - [ ] Monitoring dashboards are set up

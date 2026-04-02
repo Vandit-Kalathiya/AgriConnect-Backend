@@ -109,7 +109,19 @@ public class UserConfig {
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        // Apply gateway CORS only to HTTP API paths.
+        // Do NOT apply it to `/notifications/ws/**`; the downstream SockJS endpoint
+        // already sets CORS headers and duplicate headers break browsers.
+        source.registerCorsConfiguration("/auth/**", configuration);
+        source.registerCorsConfiguration("/users/**", configuration);
+        source.registerCorsConfiguration("/market/**", configuration);
+        source.registerCorsConfiguration("/contract-farming/**", configuration);
+        source.registerCorsConfiguration("/agreement/**", configuration);
+        source.registerCorsConfiguration("/notifications/api/**", configuration);
+        source.registerCorsConfiguration("/v3/api-docs/**", configuration);
+        source.registerCorsConfiguration("/swagger-ui/**", configuration);
+        source.registerCorsConfiguration("/swagger-ui.html", configuration);
+        source.registerCorsConfiguration("/actuator/health", configuration);
         return source;
     }
 }

@@ -1,12 +1,15 @@
 package com.agriconnect.Contract.Farming.App.Controller;
 
 import com.agriconnect.Contract.Farming.App.DTO.PaymentCreateOrderRequest;
-//import com.agriconnect.Contract.Farming.App.Service.AgreementBlockChainService;
 import com.agriconnect.Contract.Farming.App.Entity.Order;
 import com.agriconnect.Contract.Farming.App.Repository.OrderRepository;
 import com.agriconnect.Contract.Farming.App.Service.OrderService;
 import com.agriconnect.Contract.Farming.App.Service.PaymentService;
+import com.agriconnect.Contract.Farming.App.kafka.NotificationEventPublisher;
+import com.agriconnect.notification.avro.Priority;
 import com.razorpay.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -15,15 +18,16 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/payments")
 public class PaymentController {
 
-//    @Autowired
-//    private AgreementBlockChainService agreementBlockChainService;
+    private static final Logger logger = LoggerFactory.getLogger(PaymentController.class);
 
     @Autowired
     private OrderRepository orderRepository;
@@ -34,10 +38,15 @@ public class PaymentController {
     @Value("${razorpay.key.secret}")
     private String razorpayKeySecret;
 
+    @Value("${notification.topics.contract}")
+    private String contractTopic;
+
     @Autowired
     private PaymentService paymentService;
     @Autowired
     private OrderService orderService;
+    @Autowired
+    private NotificationEventPublisher notificationEventPublisher;
 
     @PostMapping(value = "/create-order", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> createOrder(PaymentCreateOrderRequest paymentCreateOrderRequest) {
@@ -87,7 +96,27 @@ public class PaymentController {
                     order.setRazorpaySignature(signature);
                     order.setStatus("paid_pending_delivery");
                     orderRepository.save(order);
-//                    paymentService.addPaymentDetails(order.getId(), paymentId, order.getAmount());
+
+                    try {
+                        Map<String, String> p = Map.of(
+                            "orderId",          order.getId(),
+                            "razorpayPaymentId", paymentId,
+                            "amount",           String.valueOf(order.getAmount()),
+                            "paidAt",           Instant.now().toString()
+                        );
+                        notificationEventPublisher.publish(contractTopic,
+                            notificationEventPublisher.buildEvent("CONTRACT_PAYMENT_SUCCESS",
+                                order.getFarmerAddress(), "contract.payment.success",
+                                List.of("EMAIL", "IN_APP"), p, Priority.CRITICAL,
+                                order.getId() + "-paysuccess", null, null));
+                        notificationEventPublisher.publish(contractTopic,
+                            notificationEventPublisher.buildEvent("CONTRACT_PAYMENT_SUCCESS",
+                                order.getBuyerAddress(), "contract.payment.success",
+                                List.of("EMAIL", "IN_APP"), p, Priority.CRITICAL,
+                                order.getId() + "-paysuccess-buyer", null, null));
+                    } catch (Exception ex) {
+                        logger.warn("[NOTIFY] CONTRACT_PAYMENT_SUCCESS failed for order={}: {}", order.getId(), ex.getMessage());
+                    }
 
                     response.put("success", true);
                     response.put("message", "Payment authorized, awaiting delivery");

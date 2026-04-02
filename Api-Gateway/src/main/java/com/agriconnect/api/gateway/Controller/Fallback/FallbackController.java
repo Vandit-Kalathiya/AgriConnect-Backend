@@ -36,6 +36,11 @@ public class FallbackController {
         return buildFallback("Agreement Generator", "Cold storage and contract generation", request);
     }
 
+    @RequestMapping("/notifications")
+    public ResponseEntity<Map<String, Object>> notificationServiceFallback(HttpServletRequest request) {
+        return buildFallback("Notification Service", "In-app, email, SMS, and push notifications", request);
+    }
+
     private ResponseEntity<Map<String, Object>> buildFallback(
             String serviceName,
             String serviceDescription,

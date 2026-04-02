@@ -29,7 +29,14 @@ public class EmailOtpService {
         String otp = String.valueOf(100000 + random.nextInt(900000));
         otpStore.put(email.toLowerCase(), new OtpEntry(otp));
         emailService.sendOtpEmail(email, otp);
-        logger.info("Email OTP sent to: {}", email);
+        logger.info("Password reset OTP sent to: {}", email);
+    }
+
+    public void sendRegistrationOtp(String email) {
+        String otp = String.valueOf(100000 + random.nextInt(900000));
+        otpStore.put(email.toLowerCase(), new OtpEntry(otp));
+        emailService.sendRegistrationOtpEmail(email, otp);
+        logger.info("Registration OTP sent to: {}", email);
     }
 
     public boolean verifyOtp(String email, String otp) {

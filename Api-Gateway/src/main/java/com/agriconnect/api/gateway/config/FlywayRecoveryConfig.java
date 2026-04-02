@@ -13,7 +13,7 @@ public class FlywayRecoveryConfig {
 
     private static final Logger log = LoggerFactory.getLogger(FlywayRecoveryConfig.class);
 
-    @Value("${FLYWAY_AUTO_REPAIR_ON_VALIDATION_ERROR:true}")
+    @Value("${FLYWAY_AUTO_REPAIR_ON_VALIDATION_ERROR:false}")
     private boolean autoRepairOnValidationError;
 
     @Bean

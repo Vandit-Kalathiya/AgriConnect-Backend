@@ -1,12 +1,16 @@
 package com.agriconnect.Generate.Agreement.App.service;
 
+import com.agriconnect.Generate.Agreement.App.kafka.NotificationEventPublisher;
 import com.agriconnect.Generate.Agreement.App.model.Cold.Booking;
 import com.agriconnect.Generate.Agreement.App.model.ColdStorage;
 import com.agriconnect.Generate.Agreement.App.repository.BookingRepository;
 import com.agriconnect.Generate.Agreement.App.repository.ColdStorageRepository;
+import com.agriconnect.notification.avro.Priority;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.mail.MessagingException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -16,6 +20,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,14 +29,20 @@ import java.util.Map;
 @Service
 public class ColdStorageService {
 
+    private static final Logger log = LoggerFactory.getLogger(ColdStorageService.class);
+
     private final BookingRepository bookingRepository;
     private final EmailService emailService;
     private final ColdStorageRepository coldStorageRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final NotificationEventPublisher notificationEventPublisher;
 
     @Value("${google.maps.api.key}")
     private String googleMapsApiKey;
+
+    @Value("${notification.topics.agreement}")
+    private String agreementTopic;
 
     private static final Map<String, String> COLD_STORAGE_OWNERS = new HashMap<>();
 
@@ -44,12 +55,14 @@ public class ColdStorageService {
     @Autowired
     public ColdStorageService(BookingRepository bookingRepository, EmailService emailService,
                               ColdStorageRepository coldStorageRepository, RestTemplate restTemplate,
-                              ObjectMapper objectMapper) {
+                              ObjectMapper objectMapper,
+                              NotificationEventPublisher notificationEventPublisher) {
         this.bookingRepository = bookingRepository;
         this.emailService = emailService;
         this.coldStorageRepository = coldStorageRepository;
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
+        this.notificationEventPublisher = notificationEventPublisher;
     }
 
     public Booking bookColdStorage(Booking booking) throws MessagingException {
@@ -67,6 +80,29 @@ public class ColdStorageService {
                 booking.getColdStorageName()
         );
 
+        try {
+            notificationEventPublisher.publish(agreementTopic,
+                notificationEventPublisher.buildEvent(
+                    "AGREEMENT_COLD_STORAGE_BOOKED",
+                    savedBooking.getFarmerId(),
+                    "agreement.cold.storage.booked",
+                    List.of("IN_APP", "EMAIL"),
+                    Map.of(
+                        "coldStorageName", savedBooking.getColdStorageName(),
+                        "cropName",        savedBooking.getCropName(),
+                        "quantity",        String.valueOf(savedBooking.getCropQuantity()),
+                        "durationDays",    String.valueOf(savedBooking.getStorageDuration()),
+                        "bookedAt",        Instant.now().toString()
+                    ),
+                    Priority.NORMAL,
+                    savedBooking.getId(),
+                    null, null
+                )
+            );
+        } catch (Exception ex) {
+            log.warn("[NOTIFY] AGREEMENT_COLD_STORAGE_BOOKED failed for booking={}: {}", savedBooking.getId(), ex.getMessage());
+        }
+
         return savedBooking;
     }
 
@@ -75,7 +111,30 @@ public class ColdStorageService {
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
         if ("Pending".equals(booking.getStatus())) {
             booking.setStatus("Approved");
-            return bookingRepository.save(booking);
+            Booking saved = bookingRepository.save(booking);
+
+            try {
+                notificationEventPublisher.publish(agreementTopic,
+                    notificationEventPublisher.buildEvent(
+                        "AGREEMENT_COLD_STORAGE_APPROVED",
+                        saved.getFarmerId(),
+                        "agreement.cold.storage.approved",
+                        List.of("EMAIL", "IN_APP"),
+                        Map.of(
+                            "coldStorageName", saved.getColdStorageName(),
+                            "cropName",        saved.getCropName(),
+                            "approvedAt",      Instant.now().toString()
+                        ),
+                        Priority.HIGH,
+                        bookingId + "-approved",
+                        null, null
+                    )
+                );
+            } catch (Exception ex) {
+                log.warn("[NOTIFY] AGREEMENT_COLD_STORAGE_APPROVED failed for booking={}: {}", bookingId, ex.getMessage());
+            }
+
+            return saved;
         } else {
             throw new RuntimeException("Booking is already approved or invalid.");
         }

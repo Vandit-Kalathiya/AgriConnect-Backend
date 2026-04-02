@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- ── Console (human-readable for local dev) ──────────────────────────── -->
+    <springProfile name="dev">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{ISO8601} [%thread] %-5level %logger{36} eventId=%X{eventId:-} correlationId=%X{correlationId:-} userId=%X{userId:-} - %msg%n</pattern>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <!-- ── JSON (structured, for log aggregation in prod) ──────────────────── -->
+    <springProfile name="prod">
+        <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>eventId</includeMdcKeyName>
+                <includeMdcKeyName>correlationId</includeMdcKeyName>
+                <includeMdcKeyName>userId</includeMdcKeyName>
+                <includeMdcKeyName>topic</includeMdcKeyName>
+                <customFields>{"service":"notification-service"}</customFields>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="JSON_CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <!-- ── Reduce noise from chatty libraries ─────────────────────────────── -->
+    <logger name="org.apache.kafka"        level="WARN"/>
+    <logger name="io.confluent"            level="WARN"/>
+    <logger name="org.hibernate"           level="WARN"/>
+    <logger name="org.springframework.web" level="INFO"/>
+
+    <!-- ── Application logger ─────────────────────────────────────────────── -->
+    <logger name="com.agriconnect" level="DEBUG"/>
+
+</configuration>

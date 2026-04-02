@@ -6,15 +6,20 @@ import com.agriconnect.Contract.Farming.App.DTO.PageResponse;
 import com.agriconnect.Contract.Farming.App.Entity.Order;
 import com.agriconnect.Contract.Farming.App.Repository.OrderRepository;
 import com.agriconnect.Contract.Farming.App.exception.ResourceNotFoundException;
+import com.agriconnect.Contract.Farming.App.kafka.NotificationEventPublisher;
 import com.agriconnect.Contract.Farming.App.util.CursorUtil;
+import com.agriconnect.notification.avro.Priority;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -24,10 +29,17 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final CursorUtil cursorUtil;
+    private final NotificationEventPublisher notificationEventPublisher;
 
-    public OrderService(OrderRepository orderRepository, CursorUtil cursorUtil) {
+    @Value("${notification.topics.contract}")
+    private String contractTopic;
+
+    public OrderService(OrderRepository orderRepository,
+                        CursorUtil cursorUtil,
+                        NotificationEventPublisher notificationEventPublisher) {
         this.orderRepository = orderRepository;
         this.cursorUtil = cursorUtil;
+        this.notificationEventPublisher = notificationEventPublisher;
     }
 
     public Order getOrderById(String orderId) {
@@ -74,6 +86,30 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
         logger.info("Order created successfully with ID: {}", savedOrder.getId());
+
+        try {
+            Map<String, String> payload = Map.of(
+                "orderId",    savedOrder.getId(),
+                "amount",     String.valueOf(savedOrder.getAmount()),
+                "quantity",   String.valueOf(savedOrder.getQuantity()),
+                "createdAt",  Instant.now().toString()
+            );
+            // Notify farmer
+            notificationEventPublisher.publish(contractTopic,
+                notificationEventPublisher.buildEvent("CONTRACT_ORDER_CREATED",
+                    savedOrder.getFarmerAddress(), "contract.order.created",
+                    List.of("EMAIL", "IN_APP"), payload, Priority.HIGH,
+                    savedOrder.getId(), null, null));
+            // Notify buyer
+            notificationEventPublisher.publish(contractTopic,
+                notificationEventPublisher.buildEvent("CONTRACT_ORDER_CREATED",
+                    savedOrder.getBuyerAddress(), "contract.order.created",
+                    List.of("EMAIL", "IN_APP"), payload, Priority.HIGH,
+                    savedOrder.getId() + "-buyer", null, null));
+        } catch (Exception ex) {
+            logger.warn("[NOTIFY] Failed to publish CONTRACT_ORDER_CREATED for order={}: {}", savedOrder.getId(), ex.getMessage());
+        }
+
         return savedOrder;
     }
 

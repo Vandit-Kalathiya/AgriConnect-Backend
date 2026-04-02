@@ -7,15 +7,20 @@ import com.agriconnect.api.gateway.Repository.User.UserRepository;
 import com.agriconnect.api.gateway.Service.Email.EmailOtpService;
 import com.agriconnect.api.gateway.exception.ResourceNotFoundException;
 import com.agriconnect.api.gateway.exception.UnauthorizedException;
+import com.agriconnect.api.gateway.kafka.NotificationEventPublisher;
+import com.agriconnect.notification.avro.Priority;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -27,14 +32,20 @@ public class PasswordResetService {
     private final UserRepository userRepository;
     private final EmailOtpService emailOtpService;
     private final PasswordEncoder passwordEncoder;
+    private final NotificationEventPublisher notificationEventPublisher;
+
+    @Value("${notification.topics.auth}")
+    private String authTopic;
 
     @Autowired
     public PasswordResetService(UserRepository userRepository,
                                 EmailOtpService emailOtpService,
-                                PasswordEncoder passwordEncoder) {
+                                PasswordEncoder passwordEncoder,
+                                NotificationEventPublisher notificationEventPublisher) {
         this.userRepository = userRepository;
         this.emailOtpService = emailOtpService;
         this.passwordEncoder = passwordEncoder;
+        this.notificationEventPublisher = notificationEventPublisher;
     }
 
     /**
@@ -71,6 +82,27 @@ public class PasswordResetService {
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+
+        try {
+            notificationEventPublisher.publish(authTopic,
+                notificationEventPublisher.buildEvent(
+                    "AUTH_PASSWORD_RESET_SUCCESS",
+                    user.getId(),
+                    "auth.password.reset.success",
+                    List.of("EMAIL", "IN_APP"),
+                    Map.of(
+                        "userName", user.getUsername() != null ? user.getUsername() : "Farmer",
+                        "resetAt",  Instant.now().toString()
+                    ),
+                    Priority.HIGH,
+                    "pwd-reset-" + user.getId(),
+                    user.getEmail(),
+                    user.getPhoneNumber()
+                )
+            );
+        } catch (Exception ex) {
+            logger.warn("[NOTIFY] Failed to publish AUTH_PASSWORD_RESET_SUCCESS: {}", ex.getMessage());
+        }
 
         logger.info("Password reset successfully for email: {}", request.getEmail());
     }

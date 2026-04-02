@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: AgriConnect
+    orgId: 1
+    folder: AgriConnect
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

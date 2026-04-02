@@ -1,0 +1,88 @@
+{
+  "namespace": "com.agriconnect.notification.avro",
+  "type": "record",
+  "name": "NotificationEvent",
+  "doc": "v1 — canonical notification event for AgriConnect. All fields with defaults are backward-compatible additions.",
+  "fields": [
+    {
+      "name": "eventId",
+      "type": "string",
+      "doc": "UUID v4 — idempotency key. Consumers deduplicate on (eventId, channel)."
+    },
+    {
+      "name": "eventType",
+      "type": "string",
+      "doc": "Domain event identifier, e.g. USER_REGISTERED, ORDER_PLACED, AGREEMENT_SIGNED, STORAGE_BOOKED."
+    },
+    {
+      "name": "sourceService",
+      "type": "string",
+      "doc": "Originating microservice name, e.g. api-gateway, contract-farming."
+    },
+    {
+      "name": "userId",
+      "type": "string",
+      "doc": "Target user UUID. Used as Kafka partition key to preserve per-user ordering."
+    },
+    {
+      "name": "channels",
+      "type": { "type": "array", "items": "string" },
+      "doc": "Ordered list of delivery channels: EMAIL | SMS | PUSH | IN_APP."
+    },
+    {
+      "name": "templateId",
+      "type": "string",
+      "doc": "Notification template key resolved by TemplateResolver, e.g. user.registered, order.placed."
+    },
+    {
+      "name": "payload",
+      "type": { "type": "map", "values": "string" },
+      "doc": "Template variable substitutions, e.g. {\"userName\": \"Ravi\", \"amount\": \"5000\"}."
+    },
+    {
+      "name": "priority",
+      "type": {
+        "type": "enum",
+        "name": "Priority",
+        "symbols": ["HIGH", "NORMAL", "LOW"]
+      },
+      "doc": "Delivery priority. HIGH events bypass batching and are dispatched immediately."
+    },
+    {
+      "name": "recipientEmail",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Override recipient email. Falls back to user profile lookup if null."
+    },
+    {
+      "name": "recipientPhone",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Override recipient phone (E.164 format). Falls back to user profile lookup if null."
+    },
+    {
+      "name": "recipientFcmToken",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Override recipient FCM device token for push notifications."
+    },
+    {
+      "name": "correlationId",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Distributed trace correlation ID propagated from the originating HTTP request."
+    },
+    {
+      "name": "schemaVersion",
+      "type": "int",
+      "default": 1,
+      "doc": "Schema version for consumer-side compatibility checks."
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Event creation timestamp in epoch milliseconds (UTC)."
+    }
+  ]
+}

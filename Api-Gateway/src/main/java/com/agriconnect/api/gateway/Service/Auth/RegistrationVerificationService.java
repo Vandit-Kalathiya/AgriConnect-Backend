@@ -9,17 +9,23 @@ import com.agriconnect.api.gateway.Service.Twilio.TwilioOtpService;
 import com.agriconnect.api.gateway.exception.BadRequestException;
 import com.agriconnect.api.gateway.exception.ConflictException;
 import com.agriconnect.api.gateway.exception.UnauthorizedException;
+import com.agriconnect.api.gateway.kafka.NotificationEventPublisher;
+import com.agriconnect.notification.avro.Priority;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class RegistrationVerificationService {
 
+    private static final Logger log = LoggerFactory.getLogger(RegistrationVerificationService.class);
     private static final long PENDING_REGISTRATION_EXPIRY_MS = 10 * 60 * 1000;
 
     private final ConcurrentHashMap<String, PendingRegistration> pendingStore = new ConcurrentHashMap<>();
@@ -27,18 +33,24 @@ public class RegistrationVerificationService {
     private final EmailOtpService emailOtpService;
     private final TwilioOtpService twilioOtpService;
     private final AuthService authService;
+    private final NotificationEventPublisher notificationEventPublisher;
 
     @Value("${feature.mobile-verification.enabled:true}")
     private boolean mobileVerificationEnabled;
 
+    @Value("${notification.topics.auth}")
+    private String authTopic;
+
     public RegistrationVerificationService(UserRepository userRepository,
                                            EmailOtpService emailOtpService,
                                            TwilioOtpService twilioOtpService,
-                                           AuthService authService) {
+                                           AuthService authService,
+                                           NotificationEventPublisher notificationEventPublisher) {
         this.userRepository = userRepository;
         this.emailOtpService = emailOtpService;
         this.twilioOtpService = twilioOtpService;
         this.authService = authService;
+        this.notificationEventPublisher = notificationEventPublisher;
     }
 
     public Map<String, Object> initiateRegistration(FarmerRegisterRequest request) {
@@ -52,7 +64,7 @@ public class RegistrationVerificationService {
         String emailKey = request.getEmail().toLowerCase();
         pendingStore.put(emailKey, new PendingRegistration(request));
 
-        emailOtpService.sendOtp(request.getEmail());
+        emailOtpService.sendRegistrationOtp(request.getEmail());
         if (mobileVerificationEnabled) {
             twilioOtpService.sendOtp(request.getPhoneNumber());
         }
@@ -88,6 +100,29 @@ public class RegistrationVerificationService {
 
         User user = authService.registerUser(pending.request);
         pendingStore.remove(emailKey);
+
+        try {
+            notificationEventPublisher.publish(authTopic,
+                notificationEventPublisher.buildEvent(
+                    "AUTH_WELCOME",
+                    user.getId(),
+                    "auth.welcome",
+                    List.of("EMAIL", "IN_APP"),
+                    Map.of(
+                        "userName",      user.getUsername() != null ? user.getUsername() : "Farmer",
+                        "userPhone",     user.getPhoneNumber(),
+                        "registeredAt",  Instant.now().toString()
+                    ),
+                    Priority.NORMAL,
+                    user.getId(),
+                    user.getEmail(),
+                    user.getPhoneNumber()
+                )
+            );
+        } catch (Exception ex) {
+            log.warn("[NOTIFY] Failed to publish AUTH_WELCOME for userId={}: {}", user.getId(), ex.getMessage());
+        }
+
         return user;
     }
 

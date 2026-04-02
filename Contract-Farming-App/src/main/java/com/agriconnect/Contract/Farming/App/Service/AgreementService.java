@@ -7,19 +7,24 @@ import com.agriconnect.Contract.Farming.App.Entity.Agreement;
 import com.agriconnect.Contract.Farming.App.Repository.AgreementRepository;
 import com.agriconnect.Contract.Farming.App.exception.BadRequestException;
 import com.agriconnect.Contract.Farming.App.exception.ResourceNotFoundException;
+import com.agriconnect.Contract.Farming.App.kafka.NotificationEventPublisher;
 import com.agriconnect.Contract.Farming.App.util.CursorUtil;
+import com.agriconnect.notification.avro.Priority;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Service
@@ -30,11 +35,18 @@ public class AgreementService {
 
     private final AgreementRepository agreementRepository;
     private final CursorUtil cursorUtil;
+    private final NotificationEventPublisher notificationEventPublisher;
+
+    @Value("${notification.topics.contract}")
+    private String contractTopic;
 
     @Autowired
-    public AgreementService(AgreementRepository agreementRepository, CursorUtil cursorUtil) {
+    public AgreementService(AgreementRepository agreementRepository,
+                            CursorUtil cursorUtil,
+                            NotificationEventPublisher notificationEventPublisher) {
         this.agreementRepository = agreementRepository;
         this.cursorUtil = cursorUtil;
+        this.notificationEventPublisher = notificationEventPublisher;
     }
 
     public Agreement uploadAgreement(MultipartFile file, String pdfHash, String orderId, String farmerAddress, String buyerAddress) throws Exception {
@@ -61,6 +73,25 @@ public class AgreementService {
 
             Agreement finalAgreement = agreementRepository.save(savedAgreement);
             logger.info("Agreement uploaded successfully with ID: {}", finalAgreement.getId());
+
+            try {
+                Map<String, String> p = Map.of(
+                    "orderId",    orderId,
+                    "pdfHash",    pdfHash,
+                    "uploadedAt", Instant.now().toString()
+                );
+                notificationEventPublisher.publish(contractTopic,
+                    notificationEventPublisher.buildEvent("CONTRACT_AGREEMENT_UPLOADED",
+                        farmerAddress, "contract.agreement.uploaded",
+                        List.of("EMAIL", "IN_APP"), p, Priority.HIGH, finalAgreement.getId(), null, null));
+                notificationEventPublisher.publish(contractTopic,
+                    notificationEventPublisher.buildEvent("CONTRACT_AGREEMENT_UPLOADED",
+                        buyerAddress, "contract.agreement.uploaded",
+                        List.of("EMAIL", "IN_APP"), p, Priority.HIGH, finalAgreement.getId() + "-buyer", null, null));
+            } catch (Exception ex) {
+                logger.warn("[NOTIFY] CONTRACT_AGREEMENT_UPLOADED failed for agreement={}: {}", finalAgreement.getId(), ex.getMessage());
+            }
+
             return finalAgreement;
 
         } catch (Exception e) {

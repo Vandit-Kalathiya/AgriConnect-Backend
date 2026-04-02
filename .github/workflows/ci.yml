@@ -4,7 +4,7 @@
 #
 #  Jobs
 #  ────
-#  1. build              Compile and package every microservice in
+#  1. build              Compile and package all 6 microservices in
 #                        parallel. Runs on every push/PR so broken
 #                        commits are caught before they can be merged.
 #
@@ -15,9 +15,10 @@
 #                          • build-<run-number>
 #                        Runs only on direct push to main (not PRs).
 #
-#  3. deploy             SSH into EC2, update the TAG in the root .env,
-#                        pull new images, restart all containers, and
-#                        reload Nginx. Runs only after docker-push succeeds.
+#  3. deploy             SSH into EC2, pre-clean disk space, update TAG,
+#                        pull new images, do a rolling restart, run health
+#                        checks, then clean up all orphaned images/cache.
+#                        Runs only after docker-push succeeds.
 #
 #  4. pipeline-summary   Writes a single consolidated Markdown summary
 #                        at the end of the entire pipeline run.
@@ -25,15 +26,15 @@
 # ──────────────────────────────────────────────────────────────────────
 #  Required GitHub Secrets  (Settings → Secrets → Actions)
 # ──────────────────────────────────────────────────────────────────────
-#  DOCKER_USERNAME   Docker Hub username
-#  DOCKER_PASSWORD   Docker Hub access token
-#  EC2_HOST          EC2 public IP or domain name
-#  EC2_USER          SSH username  (ubuntu  or  ec2-user)
-#  EC2_SSH_KEY       Full contents of the EC2 .pem private key file
-#  EC2_PORT          SSH port  (optional — defaults to 22)
+#  DOCKER_USERNAME         Docker Hub username
+#  DOCKER_PASSWORD         Docker Hub access token
+#  EC2_HOST                EC2 public IP or domain name
+#  EC2_USER                SSH username  (ubuntu  or  ec2-user)
+#  EC2_SSH_KEY             Full contents of the EC2 .pem private key file
+#  EC2_PORT                SSH port  (optional — defaults to 22)
 #
 # ──────────────────────────────────────────────────────────────────────
-#  EC2 pre-requisites  (one-time manual setup)
+#  EC2 one-time prerequisites  (manual setup before first deploy)
 # ──────────────────────────────────────────────────────────────────────
 #  1. Docker + Docker Compose plugin installed
 #  2. Repo cloned at  ~/AgriConnect_Backend
@@ -41,11 +42,15 @@
 #       DOCKER_USERNAME=<your-dockerhub-username>
 #       TAG=latest                    ← pipeline updates this automatically
 #       GATEWAY_URL=http://<EC2-IP>:8080
-#  4. Service .env files in place:
+#       GRAFANA_PASSWORD=<strong-password>
+#  4. Service .env files in place (each with production DB, API keys, etc.):
 #       ~/AgriConnect_Backend/Api-Gateway/.env
 #       ~/AgriConnect_Backend/Contract-Farming-App/.env
 #       ~/AgriConnect_Backend/Market-Access-App/.env
 #       ~/AgriConnect_Backend/Generate-Agreement-App/.env
+#       ~/AgriConnect_Backend/Notification-Service/.env    ← NEW
+#  5. Firebase credentials for Notification-Service:
+#       ~/AgriConnect_Backend/Notification-Service/firebase-service-account.json
 # ============================================================
 
 name: CI/CD — Build · Docker Push · Deploy to EC2
@@ -66,22 +71,24 @@ jobs:
 
   # ──────────────────────────────────────────────────────────────────
   # JOB 1 · Build & Package
-  # All six microservices are compiled and packaged in parallel.
+  # All 6 microservices are compiled and packaged in parallel.
   # Tests are skipped (-DskipTests) since no real tests exist yet.
   # ──────────────────────────────────────────────────────────────────
   build:
     name: "Build · ${{ matrix.service }}"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false   # if one service fails to compile, others still run
       matrix:
         include:
-          - { service: Eureka-Main-Server,     java: "23" }
+          - { service: Eureka-Main-Server,     java: "21" }
           - { service: Api-Gateway,            java: "23" }
           - { service: Contract-Farming-App,   java: "21" }
           - { service: Market-Access-App,      java: "24" }
           - { service: Generate-Agreement-App, java: "21" }
+          - { service: Notification-Service,   java: "21" }
 
     steps:
       - name: Checkout repository
@@ -113,6 +120,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 20
 
     strategy:
       fail-fast: false
@@ -123,6 +131,7 @@ jobs:
           - { service: Contract-Farming-App,   image: agriconnect-contract-farming   }
           - { service: Market-Access-App,      image: agriconnect-market-access      }
           - { service: Generate-Agreement-App, image: agriconnect-generate-agreement }
+          - { service: Notification-Service,   image: agriconnect-notification-service }
 
     steps:
       - name: Checkout repository
@@ -166,19 +175,31 @@ jobs:
 
   # ──────────────────────────────────────────────────────────────────
   # JOB 3 · Deploy to EC2
-  # Waits for every service image to be pushed to Docker Hub, then
-  # SSHes into EC2 and performs a rolling restart:
-  #   1. git pull       — sync docker-compose.yml with latest commit
-  #   2. Update TAG     — point .env at the exact sha-tagged images
-  #   3. compose pull   — download the new images from Docker Hub
-  #   4. compose up -d  — restart containers with the new images
-  #   5. nginx reload   — apply any Nginx config changes
+  # Waits for all 6 service images to be pushed to Docker Hub, then
+  # SSHes into EC2 and performs a safe rolling deployment:
+  #
+  #   Step 1 — Guard rails    Verify disk space ≥ 2 GB and all required
+  #                           .env files + Firebase JSON exist on EC2.
+  #   Step 2 — Pre-cleanup    Remove stopped containers, dangling images,
+  #                           unused networks, and old build cache so
+  #                           there is room for the new images.
+  #   Step 3 — Pull code      git pull + pin TAG to the exact sha.
+  #   Step 4 — Pull images    docker compose pull (parallel).
+  #   Step 5 — Rolling restart docker compose up -d --remove-orphans.
+  #   Step 6 — Health checks  Poll each service's /actuator/health for
+  #                           up to 120 seconds before declaring success.
+  #   Step 7 — Post-cleanup   docker image prune -a (removes all old
+  #                           sha-* images no longer used by any container).
+  #                           docker volume prune (removes anonymous volumes
+  #                           from stopped containers — named volumes kept).
+  #   Step 8 — Report         Print disk usage and running containers.
   # ──────────────────────────────────────────────────────────────────
   deploy:
     name: "Deploy to EC2"
     runs-on: ubuntu-latest
     needs: docker-push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -200,38 +221,206 @@ jobs:
           envs:        SHORT_SHA
           script_stop: true
           script: |
-            set -e
+            set -euo pipefail
             APP_DIR="$HOME/AgriConnect_Backend"
 
+            # ── Colour helpers ──────────────────────────────────────────────
+            RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+            CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+            info()    { echo -e "${CYAN}${BOLD}[INFO]${RESET}  $*"; }
+            success() { echo -e "${GREEN}${BOLD}[OK]${RESET}    $*"; }
+            warn()    { echo -e "${YELLOW}${BOLD}[WARN]${RESET}  $*"; }
+            error()   { echo -e "${RED}${BOLD}[ERROR]${RESET} $*"; }
+
+            # ══════════════════════════════════════════════════════════════
+            # STEP 1 — Guard rails
+            # ══════════════════════════════════════════════════════════════
+            info "STEP 1/8 — Guard rails"
+
             if [ ! -d "$APP_DIR" ]; then
-              echo "ERROR: $APP_DIR not found. Clone the repository to ~/AgriConnect_Backend first."
+              error "$APP_DIR not found. Clone the repo to ~/AgriConnect_Backend first."
               exit 1
             fi
-
             cd "$APP_DIR"
 
-            echo "━━━ [1/5] Pulling latest repo changes ━━━"
+            # Disk space check — require at least 2 GB free
+            AVAIL_KB=$(df / | tail -1 | awk '{print $4}')
+            AVAIL_GB=$(echo "scale=1; $AVAIL_KB/1048576" | bc)
+            info "Disk available: ${AVAIL_GB} GB"
+            if [ "$AVAIL_KB" -lt 2097152 ]; then
+              error "Less than 2 GB free on /. Running emergency prune first."
+              docker system prune -a -f --volumes 2>/dev/null || true
+              warn "Pruned. Rechecking..."
+              AVAIL_KB=$(df / | tail -1 | awk '{print $4}')
+              if [ "$AVAIL_KB" -lt 1048576 ]; then
+                error "Still under 1 GB free after emergency prune. Aborting deploy."
+                exit 1
+              fi
+            fi
+
+            # Verify required .env files exist
+            REQUIRED_ENVS=(
+              ".env"
+              "Api-Gateway/.env"
+              "Contract-Farming-App/.env"
+              "Market-Access-App/.env"
+              "Generate-Agreement-App/.env"
+              "Notification-Service/.env"
+            )
+            MISSING=0
+            for f in "${REQUIRED_ENVS[@]}"; do
+              if [ ! -f "$f" ]; then
+                error "Missing required file: $APP_DIR/$f"
+                MISSING=1
+              fi
+            done
+
+            # Verify Firebase credentials for Notification-Service
+            if [ ! -f "Notification-Service/firebase-service-account.json" ]; then
+              warn "Notification-Service/firebase-service-account.json not found."
+              warn "PUSH channel will be gracefully skipped. Place the file to enable FCM."
+            fi
+
+            if [ "$MISSING" -eq 1 ]; then
+              error "One or more required .env files are missing. Aborting."
+              exit 1
+            fi
+            success "All guard rails passed."
+
+            # ══════════════════════════════════════════════════════════════
+            # STEP 2 — Pre-deployment disk cleanup
+            # Remove stopped containers, dangling images, unused networks,
+            # and stale build cache to make room for new images.
+            # Named volumes (kafka-data, prometheus-data, grafana-data)
+            # are NOT touched — volume prune only removes anonymous ones.
+            # ══════════════════════════════════════════════════════════════
+            info "STEP 2/8 — Pre-deployment disk cleanup"
+
+            echo "--- Disk usage BEFORE cleanup ---"
+            docker system df
+            echo ""
+            df -h / | tail -1
+
+            # Remove exited / dead containers
+            docker container prune -f
+
+            # Remove dangling images only (safe — keeps all tagged images)
+            docker image prune -f
+
+            # Remove unused networks
+            docker network prune -f
+
+            # Trim build cache — keep the most recent 1 GB for layer reuse
+            docker builder prune -f --keep-storage 1GB
+
+            echo ""
+            echo "--- Disk usage AFTER pre-cleanup ---"
+            docker system df
+            echo ""
+            df -h / | tail -1
+            success "Pre-cleanup done."
+
+            # ══════════════════════════════════════════════════════════════
+            # STEP 3 — Pull latest code & pin image tag
+            # ══════════════════════════════════════════════════════════════
+            info "STEP 3/8 — Pulling latest repo changes"
             git pull origin main
 
-            echo "━━━ [2/5] Pinning image tag → sha-${SHORT_SHA} ━━━"
+            info "Pinning image tag → sha-${SHORT_SHA}"
             if grep -q "^TAG=" .env 2>/dev/null; then
               sed -i "s|^TAG=.*|TAG=sha-${SHORT_SHA}|" .env
             else
               echo "TAG=sha-${SHORT_SHA}" >> .env
             fi
+            success "Tag pinned to sha-${SHORT_SHA}."
 
-            echo "━━━ [3/5] Pulling Docker images ━━━"
+            # ══════════════════════════════════════════════════════════════
+            # STEP 4 — Pull new Docker images from Docker Hub
+            # ══════════════════════════════════════════════════════════════
+            info "STEP 4/8 — Pulling Docker images (parallel)"
             docker compose pull
+            success "All images pulled."
 
-            echo "━━━ [4/5] Restarting services ━━━"
+            # ══════════════════════════════════════════════════════════════
+            # STEP 5 — Rolling restart
+            # --remove-orphans removes containers for services deleted from
+            # docker-compose.yml (important when renaming/removing services).
+            # ══════════════════════════════════════════════════════════════
+            info "STEP 5/8 — Rolling restart"
             docker compose up -d --remove-orphans
-            docker image prune -f
+            success "Containers restarted."
 
-            echo "━━━ [5/5] Reloading Nginx ━━━"
-            sudo nginx -t && sudo systemctl reload nginx
+            # ══════════════════════════════════════════════════════════════
+            # STEP 6 — Health checks (up to 120 s per service)
+            # ══════════════════════════════════════════════════════════════
+            info "STEP 6/8 — Waiting for services to become healthy"
+
+            wait_healthy() {
+              local NAME=$1 URL=$2 MAX=${3:-120}
+              local WAITED=0
+              echo -n "  Checking $NAME ..."
+              while ! curl -sf "$URL" > /dev/null 2>&1; do
+                if [ "$WAITED" -ge "$MAX" ]; then
+                  echo ""
+                  error "$NAME did not become healthy within ${MAX}s."
+                  docker compose logs --tail=30 "$NAME" || true
+                  return 1
+                fi
+                echo -n "."
+                sleep 5
+                WAITED=$((WAITED + 5))
+              done
+              echo " healthy (${WAITED}s)"
+            }
+
+            wait_healthy "eureka-server"       "http://localhost:8761/actuator/health"
+            wait_healthy "kafka"               "http://localhost:8081/subjects"           120   # use SR as Kafka proxy
+            wait_healthy "schema-registry"     "http://localhost:8081/subjects"
+            wait_healthy "notification-service" "http://localhost:2530/actuator/health"   120
+            wait_healthy "contract-farming"    "http://localhost:2526/actuator/health"
+            wait_healthy "market-access"       "http://localhost:2527/actuator/health"
+            wait_healthy "generate-agreement"  "http://localhost:2529/actuator/health"
+            wait_healthy "api-gateway"         "http://localhost:8080/actuator/health"    120
+
+            success "All services are healthy."
+
+            # ══════════════════════════════════════════════════════════════
+            # STEP 7 — Post-deployment cleanup
+            # Now that new containers are running we can safely remove ALL
+            # images not referenced by any container — this wipes old sha-*
+            # tags from previous deploys without touching anything in use.
+            # ══════════════════════════════════════════════════════════════
+            info "STEP 7/8 — Post-deployment cleanup"
+
+            # Remove ALL unused images (old sha-* from previous deploys)
+            docker image prune -a -f
+
+            # Remove anonymous volumes from stopped/removed containers
+            # Named volumes (kafka-data, prometheus-data, grafana-data) are safe
+            docker volume prune -f
+
+            # Final builder cache trim
+            docker builder prune -f --keep-storage 512MB
 
             echo ""
-            echo "━━━ Deployment complete ━━━"
+            echo "--- Disk usage AFTER post-cleanup ---"
+            docker system df
+            echo ""
+            df -h / | tail -1
+            success "Post-cleanup done."
+
+            # ══════════════════════════════════════════════════════════════
+            # STEP 8 — Reload Nginx & print final status
+            # ══════════════════════════════════════════════════════════════
+            info "STEP 8/8 — Reloading Nginx"
+            sudo nginx -t && sudo systemctl reload nginx
+            success "Nginx reloaded."
+
+            echo ""
+            echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo -e "  Deployment complete — sha-${SHORT_SHA}"
+            echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+            echo ""
             docker compose ps
 
 
@@ -269,9 +458,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Stage | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Build & Package (5 services) | $(icon $BUILD_RESULT) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Docker Build & Push          | $(icon $DOCKER_RESULT) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Deploy to EC2 + Nginx reload | $(icon $DEPLOY_RESULT) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build & Package (6 services)  | $(icon $BUILD_RESULT) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build & Push (6 images) | $(icon $DOCKER_RESULT) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy to EC2 + Nginx reload   | $(icon $DEPLOY_RESULT) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Actor:** @${{ github.actor }} &nbsp;|&nbsp; **Branch:** \`${{ github.ref_name }}\` &nbsp;|&nbsp; **Commit:** \`${SHORT_SHA}\`" >> $GITHUB_STEP_SUMMARY
 
@@ -287,7 +476,8 @@ jobs:
               agriconnect-api-gateway \
               agriconnect-contract-farming \
               agriconnect-market-access \
-              agriconnect-generate-agreement
+              agriconnect-generate-agreement \
+              agriconnect-notification-service
             do
               echo "| \`${DOCKER_USER}/${image}\` | \`latest\` · \`sha-${SHORT_SHA}\` · \`build-${{ github.run_number }}\` |" >> $GITHUB_STEP_SUMMARY
             done
@@ -302,6 +492,8 @@ jobs:
             echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
             echo "| Host | \`${{ secrets.EC2_HOST }}\` |" >> $GITHUB_STEP_SUMMARY
             echo "| Image tag deployed | \`sha-${SHORT_SHA}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| Health checks | All 8 services healthy ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| Disk cleanup | Completed ✅ |" >> $GITHUB_STEP_SUMMARY
             echo "| Nginx | Reloaded ✅ |" >> $GITHUB_STEP_SUMMARY
           fi
 

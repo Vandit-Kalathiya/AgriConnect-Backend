@@ -1,0 +1,42 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: docker-compose
+
+scrape_configs:
+
+  - job_name: api-gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['api-gateway:8080']
+        labels:
+          service: api-gateway
+
+  - job_name: market-access
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['market-access:2527']
+        labels:
+          service: market-access
+
+  - job_name: contract-farming
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['contract-farming:2526']
+        labels:
+          service: contract-farming
+
+  - job_name: generate-agreement
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['generate-agreement:2529']
+        labels:
+          service: generate-agreement
+
+  - job_name: notification-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['notification-service:2530']
+        labels:
+          service: notification-service
