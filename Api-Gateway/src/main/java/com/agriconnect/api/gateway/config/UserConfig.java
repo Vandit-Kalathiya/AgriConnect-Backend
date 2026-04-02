@@ -56,8 +56,8 @@ public class UserConfig {
                     "/*/v3/api-docs",
                     "/*/v3/api-docs/**").permitAll();
 
-            // Public: Actuator health probe only
-            authorize.requestMatchers("/actuator").permitAll();
+            // Public: only health + prometheus for container checks and scraping
+            authorize.requestMatchers("/actuator/health", "/actuator/prometheus").permitAll();
 
             // Public: Auth endpoints — register, login, and password reset
             authorize.requestMatchers(HttpMethod.POST, "/auth/register").permitAll();
