@@ -94,7 +94,10 @@ server:
     enabled: true
     mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
   http2:
-    enabled: true
+    # Nginx proxies to this gateway over plain HTTP/1.1 on localhost.
+    # Keeping HTTP/2 disabled avoids upstream protocol/header parsing issues
+    # such as "upstream sent invalid header: \"\\x3a...\"".
+    enabled: false
 
 # ── Eureka ───────────────────────────────────────────────────────────────────
 eureka:
