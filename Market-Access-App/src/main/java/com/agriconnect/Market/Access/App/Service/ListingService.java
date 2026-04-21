@@ -35,15 +35,22 @@ public class ListingService {
     private static final Logger log = LoggerFactory.getLogger(ListingService.class);
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
+    private static final String LISTING_KEY_PREFIX = "listing:";
+    private static final String ALL_LISTINGS_KEY = "listings:all";
+    private static final String ACTIVE_LISTINGS_KEY = "listings:active";
+    private static final String FARMER_LISTINGS_PREFIX = "listings:farmer:";
+    private static final String LISTING_IMAGES_PREFIX = "listing:images:";
+    private static final String IMAGE_DATA_PREFIX = "image:data:";
+
+    private static final Duration SINGLE_TTL = Duration.ofHours(2);
+    private static final Duration LIST_TTL = Duration.ofMinutes(30);
+    private static final Duration FARMER_TTL = Duration.ofHours(1);
+    private static final Duration IMAGE_TTL = Duration.ofHours(24);
+
     private final ListingRepository listingRepository;
     private final ImageRepository imageRepository;
     private final NotificationEventPublisher notificationEventPublisher;
     private final CacheService cacheService;
-
-    private static final Duration LISTING_TTL = Duration.ofHours(2);
-    private static final Duration LIST_TTL = Duration.ofMinutes(30);
-    private static final String ALL_LISTINGS_KEY = "listings:all";
-    private static final String ACTIVE_LISTINGS_KEY = "listings:active";
 
     @Value("${notification.topics.market}")
     private String marketTopic;
@@ -245,6 +252,11 @@ public class ListingService {
             cacheService.evict(ALL_LISTINGS_KEY);
             cacheService.evict(ACTIVE_LISTINGS_KEY);
             cacheService.evict("listings:farmer:" + updated.getContactOfFarmer());
+            cacheService.evict(LISTING_IMAGES_PREFIX + listingId);
+            // Evict individual image caches
+            for (Image img : updated.getImages()) {
+                cacheService.evict(IMAGE_DATA_PREFIX + img.getId());
+            }
             return updated;
 
         } catch (NumberFormatException e) {
@@ -262,26 +274,48 @@ public class ListingService {
         return cacheService.get(cacheKey, Listing.class).orElseGet(() -> {
             Listing listing = listingRepository.findById(listingId)
                     .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
-            cacheService.save(cacheKey, listing, LISTING_TTL);
+            cacheService.save(cacheKey, listing, LIST_TTL);
             return listing;
         });
     }
 
     public List<byte[]> getListingImages(String listingId) {
         log.debug("Fetching images for listing ID: {}", listingId);
+        String cacheKey = LISTING_IMAGES_PREFIX + listingId;
+
+        // Try to get from cache first
+        List<byte[]> cached = cacheService.get(cacheKey, List.class).orElse(null);
+        if (cached != null) {
+            log.debug("Cache HIT for listing images: {}", listingId);
+            return cached;
+        }
+
+        log.debug("Cache MISS for listing images: {}, fetching from DB", listingId);
         Listing listing = listingRepository.findById(listingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
 
         List<byte[]> images = new ArrayList<>();
         for (Image image : listing.getImages()) {
-            images.add(image.getData());
+            // Cache individual images too
+            String imageCacheKey = IMAGE_DATA_PREFIX + image.getId();
+            byte[] imageData = cacheService.get(imageCacheKey, byte[].class).orElseGet(() -> {
+                byte[] data = image.getData();
+                cacheService.save(imageCacheKey, data, IMAGE_TTL);
+                return data;
+            });
+            images.add(imageData);
         }
+
+        // Cache the complete list
+        cacheService.save(cacheKey, images, IMAGE_TTL);
+        log.debug("Cached {} images for listing: {}", images.size(), listingId);
         return images;
     }
 
     public List<Listing> getAllListings() {
         log.debug("Fetching all listings");
         return cacheService.get(ALL_LISTINGS_KEY, List.class).orElseGet(() -> {
+            // Don't cache with images - causes serialization issues
             List<Listing> listings = listingRepository.findAll();
             cacheService.save(ALL_LISTINGS_KEY, listings, LIST_TTL);
             return listings;
@@ -302,6 +336,11 @@ public class ListingService {
         cacheService.evict(ALL_LISTINGS_KEY);
         cacheService.evict(ACTIVE_LISTINGS_KEY);
         cacheService.evict("listings:farmer:" + listing.getContactOfFarmer());
+        cacheService.evict(LISTING_IMAGES_PREFIX + listingId);
+        // Evict individual image caches
+        for (Image img : listing.getImages()) {
+            cacheService.evict(IMAGE_DATA_PREFIX + img.getId());
+        }
 
         try {
             notificationEventPublisher.publish(marketTopic,
@@ -349,6 +388,7 @@ public class ListingService {
         cacheService.evict(ALL_LISTINGS_KEY);
         cacheService.evict(ACTIVE_LISTINGS_KEY);
         cacheService.evict("listings:farmer:" + updated.getContactOfFarmer());
+        cacheService.evict(LISTING_IMAGES_PREFIX + listingId);
         log.info("Listing status updated successfully for ID: {}", listingId);
 
         try {
@@ -382,6 +422,7 @@ public class ListingService {
     public List<Listing> getActiveListings() {
         log.debug("Fetching active listings");
         return cacheService.get(ACTIVE_LISTINGS_KEY, List.class).orElseGet(() -> {
+            // Don't cache with images - causes serialization issues
             List<Listing> listings = listingRepository.findActiveListings();
             cacheService.save(ACTIVE_LISTINGS_KEY, listings, LIST_TTL);
             return listings;
@@ -392,6 +433,7 @@ public class ListingService {
         log.debug("Fetching listings for farmer contact: {}", farmerContact);
         String cacheKey = "listings:farmer:" + farmerContact;
         return cacheService.get(cacheKey, List.class).orElseGet(() -> {
+            // Don't cache with images - causes serialization issues
             List<Listing> listings = listingRepository.findByContactOfFarmer(farmerContact)
                     .orElseThrow(() -> new ResourceNotFoundException("Listing", "farmerContact", farmerContact));
             cacheService.save(cacheKey, listings, Duration.ofHours(1));

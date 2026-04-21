@@ -13,7 +13,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "listings")
+@Table(name = "listings", indexes = {
+        @Index(name = "idx_listing_status", columnList = "status"),
+        @Index(name = "idx_listing_contact", columnList = "contactOfFarmer"),
+        @Index(name = "idx_listing_created_date", columnList = "createdDate"),
+        @Index(name = "idx_listing_status_created", columnList = "status,createdDate")
+})
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -44,8 +49,9 @@ public class Listing {
     private LocalDate lastUpdatedDate;
     private LocalTime createdTime;
 
-    @OneToMany(mappedBy = "listing", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "listing", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JsonManagedReference
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private List<Image> images = new ArrayList<>();
 
     public void addImage(Image image) {

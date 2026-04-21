@@ -17,7 +17,12 @@ import java.util.Collection;
 import java.util.List;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", indexes = {
+        @Index(name = "idx_user_phone", columnList = "phoneNumber", unique = true),
+        @Index(name = "idx_user_email", columnList = "email", unique = true),
+        @Index(name = "idx_user_unique_hex", columnList = "uniqueHexAddress", unique = true),
+        @Index(name = "idx_user_username", columnList = "username")
+})
 @Data
 @Builder
 @AllArgsConstructor
@@ -50,8 +55,7 @@ public class User implements UserDetails {
     @Column(name = "email_verified", nullable = false)
     private boolean emailVerified = false;
 
-
-//    List<Object> wishlist = new ArrayList<>();
+    // List<Object> wishlist = new ArrayList<>();
 
     @CreatedDate
     @Column(updatable = false)
@@ -64,6 +68,7 @@ public class User implements UserDetails {
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of();
     }
+
     @Override
     public boolean isAccountNonExpired() {
         return true;

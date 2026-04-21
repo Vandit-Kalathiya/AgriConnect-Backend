@@ -8,6 +8,7 @@ import com.agriconnect.api.gateway.Entity.Token.JwtToken;
 import com.agriconnect.api.gateway.Entity.User.User;
 import com.agriconnect.api.gateway.Repository.Session.SessionRepository;
 import com.agriconnect.api.gateway.Repository.User.UserRepository;
+import com.agriconnect.api.gateway.Service.Cache.CacheService;
 import com.agriconnect.api.gateway.Service.Token.TokenService;
 import com.agriconnect.api.gateway.exception.BadRequestException;
 import com.agriconnect.api.gateway.exception.ConflictException;
@@ -35,6 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -51,6 +53,10 @@ public class AuthService {
     private static final SecureRandom random = new SecureRandom();
     private static final int SESSION_EXPIRY_DAYS = 7;
 
+    private static final String USER_PHONE_KEY_PREFIX = "user:phone:";
+    private static final String USER_EMAIL_KEY_PREFIX = "user:email:";
+    private static final Duration USER_TTL = Duration.ofHours(12);
+
     private final AuthenticationManager manager;
     private final JwtAuthenticationHelper jwtHelper;
     private final UserDetailsService userDetailsService;
@@ -59,6 +65,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final NotificationEventPublisher notificationEventPublisher;
+    private final CacheService cacheService;
 
     @Value("${jwt.expiration:604800000}")
     private Long jwtExpiration;
@@ -74,7 +81,8 @@ public class AuthService {
             SessionRepository sessionRepository,
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            NotificationEventPublisher notificationEventPublisher) {
+            NotificationEventPublisher notificationEventPublisher,
+            CacheService cacheService) {
         this.manager = manager;
         this.jwtHelper = jwtHelper;
         this.userDetailsService = userDetailsService;
@@ -83,6 +91,7 @@ public class AuthService {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.notificationEventPublisher = notificationEventPublisher;
+        this.cacheService = cacheService;
     }
 
     public User registerUser(FarmerRegisterRequest farmerRegisterRequest) {
@@ -193,10 +202,27 @@ public class AuthService {
     }
 
     private User getUserByUsernameOrEmail(String username) {
+        String cacheKey;
         if (username.matches("^[0-9]{10}$")) {
-            return userRepository.getUserByPhoneNumber(username).orElse(null);
+            cacheKey = USER_PHONE_KEY_PREFIX + username;
+            return cacheService.get(cacheKey, User.class).orElseGet(() -> {
+                User user = userRepository.getUserByPhoneNumber(username).orElse(null);
+                if (user != null) {
+                    cacheService.save(cacheKey, user, USER_TTL);
+                    logger.debug("Cached user by phone: {}", username);
+                }
+                return user;
+            });
         } else {
-            return userRepository.findByEmail(username).orElse(null);
+            cacheKey = USER_EMAIL_KEY_PREFIX + username;
+            return cacheService.get(cacheKey, User.class).orElseGet(() -> {
+                User user = userRepository.findByEmail(username).orElse(null);
+                if (user != null) {
+                    cacheService.save(cacheKey, user, USER_TTL);
+                    logger.debug("Cached user by email: {}", username);
+                }
+                return user;
+            });
         }
     }
 
@@ -205,8 +231,14 @@ public class AuthService {
 
         if (principal instanceof UserDetails) {
             String phoneNumber = ((UserDetails) principal).getUsername();
-            return userRepository.getUserByPhoneNumber(phoneNumber)
-                    .orElseThrow(() -> new ResourceNotFoundException("User", "phoneNumber", phoneNumber));
+            String cacheKey = USER_PHONE_KEY_PREFIX + phoneNumber;
+            return cacheService.get(cacheKey, User.class).orElseGet(() -> {
+                User user = userRepository.getUserByPhoneNumber(phoneNumber)
+                        .orElseThrow(() -> new ResourceNotFoundException("User", "phoneNumber", phoneNumber));
+                cacheService.save(cacheKey, user, USER_TTL);
+                logger.debug("Cached current user: {}", phoneNumber);
+                return user;
+            });
         }
 
         logger.error("Authenticated principal is not a UserDetails instance");

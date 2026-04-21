@@ -9,7 +9,16 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 
 @Entity
-@Table(name = "orders")
+@Table(name = "orders", indexes = {
+        @Index(name = "idx_order_farmer_addr", columnList = "farmerAddress"),
+        @Index(name = "idx_order_buyer_addr", columnList = "buyerAddress"),
+        @Index(name = "idx_order_status", columnList = "status"),
+        @Index(name = "idx_order_razorpay_id", columnList = "razorpayOrderId"),
+        @Index(name = "idx_order_pdf_hash", columnList = "pdfHash"),
+        @Index(name = "idx_order_created", columnList = "createdDate,createdTime,id"),
+        @Index(name = "idx_order_farmer_status", columnList = "farmerAddress,status"),
+        @Index(name = "idx_order_buyer_status", columnList = "buyerAddress,status")
+})
 @Getter
 @Setter
 @NoArgsConstructor

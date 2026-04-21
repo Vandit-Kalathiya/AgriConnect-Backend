@@ -9,7 +9,14 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 
 @Entity
-@Table(name = "agreement")
+@Table(name = "agreement", indexes = {
+        @Index(name = "idx_agreement_tx_hash", columnList = "transactionHash", unique = true),
+        @Index(name = "idx_agreement_pdf_hash", columnList = "pdfHash", unique = true),
+        @Index(name = "idx_agreement_order_id", columnList = "orderId", unique = true),
+        @Index(name = "idx_agreement_farmer_addr", columnList = "farmerAddress"),
+        @Index(name = "idx_agreement_buyer_addr", columnList = "buyerAddress"),
+        @Index(name = "idx_agreement_created", columnList = "createDate,createTime,id")
+})
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -31,7 +38,9 @@ public class Agreement {
     @Lob
     private byte[] data;
 
-    public Agreement(String farmerAddress, String buyerAddress, String orderId, Long size, String fileName, String fileType, byte[] data, LocalDate createDate, LocalTime createTime, String transactionHash, String pdfHash) {
+    public Agreement(String farmerAddress, String buyerAddress, String orderId, Long size, String fileName,
+            String fileType, byte[] data, LocalDate createDate, LocalTime createTime, String transactionHash,
+            String pdfHash) {
         this.fileName = fileName;
         this.fileType = fileType;
         this.data = data;
@@ -43,7 +52,7 @@ public class Agreement {
         this.orderId = orderId;
         this.farmerAddress = farmerAddress;
         this.buyerAddress = buyerAddress;
-//        this.downloadUrl = downloadUrl;
+        // this.downloadUrl = downloadUrl;
     }
 
     private LocalDate createDate;
