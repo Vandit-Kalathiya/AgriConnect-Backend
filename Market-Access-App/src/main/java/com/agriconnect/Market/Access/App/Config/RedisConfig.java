@@ -1,4 +1,4 @@
-package com.agriconnect.Contract.config;
+package com.agriconnect.Market.Access.App.Config;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,67 +32,54 @@ public class RedisConfig {
 
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
-        logger.info("Initializing RedisTemplate with Valkey-compatible configuration");
-        
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
-        
+
         StringRedisSerializer stringSerializer = new StringRedisSerializer();
         GenericJackson2JsonRedisSerializer jsonSerializer = createJsonSerializer();
-        
+
         template.setKeySerializer(stringSerializer);
         template.setHashKeySerializer(stringSerializer);
         template.setValueSerializer(jsonSerializer);
         template.setHashValueSerializer(jsonSerializer);
-        
         template.afterPropertiesSet();
-        
-        logger.info("RedisTemplate initialized successfully");
+
+        logger.info("RedisTemplate initialized for Market-Access-App");
         return template;
     }
 
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-        logger.info("Configuring RedisCacheManager with per-cache TTL settings");
-        
         GenericJackson2JsonRedisSerializer jsonSerializer = createJsonSerializer();
-        
+
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofHours(1))
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer))
                 .disableCachingNullValues();
 
-        Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
-        
-        cacheConfigurations.put("contractCache", defaultConfig.entryTtl(Duration.ofHours(6)));
-        cacheConfigurations.put("orderCache", defaultConfig.entryTtl(Duration.ofHours(2)));
-        cacheConfigurations.put("paymentCache", defaultConfig.entryTtl(Duration.ofHours(1)));
-        cacheConfigurations.put("agreementCache", defaultConfig.entryTtl(Duration.ofDays(1)));
-        cacheConfigurations.put("farmerCache", defaultConfig.entryTtl(Duration.ofHours(12)));
+        Map<String, RedisCacheConfiguration> cacheConfigs = new HashMap<>();
+        cacheConfigs.put("listingCache", defaultConfig.entryTtl(Duration.ofHours(2)));
+        cacheConfigs.put("listingsAllCache", defaultConfig.entryTtl(Duration.ofMinutes(30)));
+        cacheConfigs.put("listingsActiveCache", defaultConfig.entryTtl(Duration.ofMinutes(30)));
+        cacheConfigs.put("listingsFarmerCache", defaultConfig.entryTtl(Duration.ofHours(1)));
 
-        RedisCacheManager cacheManager = RedisCacheManager.builder(connectionFactory)
+        logger.info("RedisCacheManager configured for Market-Access-App");
+        return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
-                .withInitialCacheConfigurations(cacheConfigurations)
+                .withInitialCacheConfigurations(cacheConfigs)
                 .transactionAware()
                 .build();
-
-        logger.info("RedisCacheManager configured with {} custom cache configurations", cacheConfigurations.size());
-        return cacheManager;
     }
 
     private GenericJackson2JsonRedisSerializer createJsonSerializer() {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
-        
         objectMapper.activateDefaultTyping(
-                BasicPolymorphicTypeValidator.builder()
-                        .allowIfBaseType(Object.class)
-                        .build(),
+                BasicPolymorphicTypeValidator.builder().allowIfBaseType(Object.class).build(),
                 ObjectMapper.DefaultTyping.NON_FINAL,
                 JsonTypeInfo.As.PROPERTY
         );
-        
         return new GenericJackson2JsonRedisSerializer(objectMapper);
     }
 }

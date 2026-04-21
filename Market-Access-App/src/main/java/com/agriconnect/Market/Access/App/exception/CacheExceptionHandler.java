@@ -1,4 +1,4 @@
-package com.agriconnect.Contract.exception;
+package com.agriconnect.Market.Access.App.exception;
 
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -23,15 +23,12 @@ public class CacheExceptionHandler {
     public Object handleCacheExceptions(ProceedingJoinPoint joinPoint) throws Throwable {
         try {
             return joinPoint.proceed();
-        } catch (RedisConnectionFailureException e) {
-            logger.warn("Redis connection failed during cache operation. Degrading gracefully: {}", e.getMessage());
-            return joinPoint.proceed();
-        } catch (RedisSystemException e) {
-            logger.warn("Redis system error during cache operation. Degrading gracefully: {}", e.getMessage());
+        } catch (RedisConnectionFailureException | RedisSystemException e) {
+            logger.warn("Redis error during cache operation, degrading gracefully: {}", e.getMessage());
             return joinPoint.proceed();
         } catch (Exception e) {
             if (e.getCause() instanceof RedisConnectionFailureException) {
-                logger.warn("Redis connection failed (nested). Degrading gracefully: {}", e.getMessage());
+                logger.warn("Redis connection failed (nested), degrading gracefully: {}", e.getMessage());
                 return joinPoint.proceed();
             }
             throw e;

@@ -55,6 +55,7 @@ WebSocket connections go through the dedicated `Ws-Gateway`.
 - **Apache Kafka** — event streaming backbone
 - **Confluent Schema Registry + Apache Avro** — schema-enforced event contracts
 - **Spring Kafka + Spring WebSocket (STOMP)** — event consumption and real-time delivery
+- **Redis (local) / Valkey (production)** — distributed caching with graceful degradation
 - Prometheus + Grafana — metrics and dashboards
 - Container-friendly deployment model (Docker Compose)
 
@@ -232,9 +233,10 @@ Backend/
     ├── PRODUCTION_DB_MIGRATION_GUIDE.md
     ├── DEPLOYMENT_FLAG_GUIDE.md
     ├── DEPLOYMENT_QUICK_REFERENCE.md
+    ├── CACHE_IMPLEMENTATION_COMPLETE.md    # ✅ Complete caching guide
     ├── CACHE_CONFIGURATION_GUIDE.md
-    ├── REDIS_CACHE_GUIDE.md
-    └── REDIS_IMPLEMENTATION_SUMMARY.md
+    ├── MULTI_SERVICE_CACHE_IMPLEMENTATION.md
+    └── APPLICATION_YML_UPDATES_COMPLETE.md
 ```
 
 ---
@@ -264,6 +266,10 @@ For production DB migration procedures, use:
 For CI/CD deployment control (enable/disable EC2 deployment), use:
 
 - `docs/DEPLOYMENT_FLAG_GUIDE.md`
+
+For Redis/Valkey caching setup and usage (complete end-to-end implementation), use:
+
+- `docs/CACHE_IMPLEMENTATION_COMPLETE.md`
 
 ---
 

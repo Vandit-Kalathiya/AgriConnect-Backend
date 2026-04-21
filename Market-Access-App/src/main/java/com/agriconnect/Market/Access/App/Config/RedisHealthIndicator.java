@@ -1,4 +1,4 @@
-package com.agriconnect.Contract.config;
+package com.agriconnect.Market.Access.App.Config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +23,6 @@ public class RedisHealthIndicator implements HealthIndicator {
     public Health health() {
         try {
             String response = connectionFactory.getConnection().ping();
-            logger.debug("Redis health check successful: {}", response);
             return Health.up()
                     .withDetail("service", "Redis/Valkey")
                     .withDetail("status", "Connected")
@@ -33,7 +32,6 @@ public class RedisHealthIndicator implements HealthIndicator {
             logger.error("Redis health check failed", e);
             return Health.down()
                     .withDetail("service", "Redis/Valkey")
-                    .withDetail("status", "Disconnected")
                     .withDetail("error", e.getMessage())
                     .build();
         }

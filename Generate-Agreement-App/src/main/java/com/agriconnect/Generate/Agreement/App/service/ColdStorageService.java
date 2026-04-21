@@ -20,6 +20,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -37,6 +38,11 @@ public class ColdStorageService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final NotificationEventPublisher notificationEventPublisher;
+    private final CacheService cacheService;
+
+    private static final Duration STORAGE_TTL = Duration.ofHours(24);
+    private static final Duration NEARBY_TTL = Duration.ofHours(6);
+    private static final Duration BOOKING_TTL = Duration.ofHours(1);
 
     @Value("${google.maps.api.key}")
     private String googleMapsApiKey;
@@ -54,20 +60,23 @@ public class ColdStorageService {
 
     @Autowired
     public ColdStorageService(BookingRepository bookingRepository, EmailService emailService,
-                              ColdStorageRepository coldStorageRepository, RestTemplate restTemplate,
-                              ObjectMapper objectMapper,
-                              NotificationEventPublisher notificationEventPublisher) {
+            ColdStorageRepository coldStorageRepository, RestTemplate restTemplate,
+            ObjectMapper objectMapper,
+            NotificationEventPublisher notificationEventPublisher,
+            CacheService cacheService) {
         this.bookingRepository = bookingRepository;
         this.emailService = emailService;
         this.coldStorageRepository = coldStorageRepository;
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.notificationEventPublisher = notificationEventPublisher;
+        this.cacheService = cacheService;
     }
 
     public Booking bookColdStorage(Booking booking) throws MessagingException {
         booking.setStatus("Pending");
         Booking savedBooking = bookingRepository.save(booking);
+        cacheService.evict("bookings:farmer:" + savedBooking.getFarmerId());
 
         String ownerEmail = COLD_STORAGE_OWNERS.getOrDefault(booking.getColdStorageName(), "suhasikakani545@gmail.com");
         String farmerName = "Farmer " + booking.getFarmerId();
@@ -77,30 +86,27 @@ public class ColdStorageService {
                 booking.getCropName(),
                 booking.getCropQuantity(),
                 booking.getStorageDuration(),
-                booking.getColdStorageName()
-        );
+                booking.getColdStorageName());
 
         try {
             notificationEventPublisher.publish(agreementTopic,
-                notificationEventPublisher.buildEvent(
-                    "AGREEMENT_COLD_STORAGE_BOOKED",
-                    savedBooking.getFarmerId(),
-                    "agreement.cold.storage.booked",
-                    List.of("IN_APP", "EMAIL"),
-                    Map.of(
-                        "coldStorageName", savedBooking.getColdStorageName(),
-                        "cropName",        savedBooking.getCropName(),
-                        "quantity",        String.valueOf(savedBooking.getCropQuantity()),
-                        "durationDays",    String.valueOf(savedBooking.getStorageDuration()),
-                        "bookedAt",        Instant.now().toString()
-                    ),
-                    Priority.NORMAL,
-                    savedBooking.getId(),
-                    null, null
-                )
-            );
+                    notificationEventPublisher.buildEvent(
+                            "AGREEMENT_COLD_STORAGE_BOOKED",
+                            savedBooking.getFarmerId(),
+                            "agreement.cold.storage.booked",
+                            List.of("IN_APP", "EMAIL"),
+                            Map.of(
+                                    "coldStorageName", savedBooking.getColdStorageName(),
+                                    "cropName", savedBooking.getCropName(),
+                                    "quantity", String.valueOf(savedBooking.getCropQuantity()),
+                                    "durationDays", String.valueOf(savedBooking.getStorageDuration()),
+                                    "bookedAt", Instant.now().toString()),
+                            Priority.NORMAL,
+                            savedBooking.getId(),
+                            null, null));
         } catch (Exception ex) {
-            log.warn("[NOTIFY] AGREEMENT_COLD_STORAGE_BOOKED failed for booking={}: {}", savedBooking.getId(), ex.getMessage());
+            log.warn("[NOTIFY] AGREEMENT_COLD_STORAGE_BOOKED failed for booking={}: {}", savedBooking.getId(),
+                    ex.getMessage());
         }
 
         return savedBooking;
@@ -112,26 +118,25 @@ public class ColdStorageService {
         if ("Pending".equals(booking.getStatus())) {
             booking.setStatus("Approved");
             Booking saved = bookingRepository.save(booking);
+            cacheService.evict("bookings:farmer:" + saved.getFarmerId());
 
             try {
                 notificationEventPublisher.publish(agreementTopic,
-                    notificationEventPublisher.buildEvent(
-                        "AGREEMENT_COLD_STORAGE_APPROVED",
-                        saved.getFarmerId(),
-                        "agreement.cold.storage.approved",
-                        List.of("EMAIL", "IN_APP"),
-                        Map.of(
-                            "coldStorageName", saved.getColdStorageName(),
-                            "cropName",        saved.getCropName(),
-                            "approvedAt",      Instant.now().toString()
-                        ),
-                        Priority.HIGH,
-                        bookingId + "-approved",
-                        null, null
-                    )
-                );
+                        notificationEventPublisher.buildEvent(
+                                "AGREEMENT_COLD_STORAGE_APPROVED",
+                                saved.getFarmerId(),
+                                "agreement.cold.storage.approved",
+                                List.of("EMAIL", "IN_APP"),
+                                Map.of(
+                                        "coldStorageName", saved.getColdStorageName(),
+                                        "cropName", saved.getCropName(),
+                                        "approvedAt", Instant.now().toString()),
+                                Priority.HIGH,
+                                bookingId + "-approved",
+                                null, null));
             } catch (Exception ex) {
-                log.warn("[NOTIFY] AGREEMENT_COLD_STORAGE_APPROVED failed for booking={}: {}", bookingId, ex.getMessage());
+                log.warn("[NOTIFY] AGREEMENT_COLD_STORAGE_APPROVED failed for booking={}: {}", bookingId,
+                        ex.getMessage());
             }
 
             return saved;
@@ -141,10 +146,20 @@ public class ColdStorageService {
     }
 
     public List<Booking> getFarmerBookings(String farmerId) {
-        return bookingRepository.findByFarmerId(farmerId);
+        String cacheKey = "bookings:farmer:" + farmerId;
+        return cacheService.get(cacheKey, List.class).orElseGet(() -> {
+            List<Booking> bookings = bookingRepository.findByFarmerId(farmerId);
+            cacheService.save(cacheKey, bookings, BOOKING_TTL);
+            return bookings;
+        });
     }
 
     public List<ColdStorage> fetchNearbyColdStorages(double lat, double lon) throws IOException {
+        String nearbyKey = "coldstorage:nearby:" + lat + ":" + lon;
+        List<ColdStorage> cached = cacheService.get(nearbyKey, List.class).orElse(null);
+        if (cached != null)
+            return cached;
+
         String url = UriComponentsBuilder.fromHttpUrl("https://maps.googleapis.com/maps/api/place/nearbysearch/json")
                 .queryParam("location", lat + "," + lon)
                 .queryParam("radius", 100000) // 50 km
@@ -177,33 +192,42 @@ public class ColdStorageService {
         List<ColdStorage> storages = new ArrayList<>();
         for (JsonNode place : results) {
             ColdStorage storage = parseColdStorageFromJson(place, lat, lon);
-            // Check if already exists in DB to avoid duplicates
             ColdStorage existing = coldStorageRepository.findByPlaceId(storage.getPlaceId()).orElse(null);
             if (existing == null) {
                 coldStorageRepository.save(storage);
                 storages.add(storage);
             } else {
-                storages.add(existing); // Use existing record
+                storages.add(existing);
             }
         }
+        cacheService.save(nearbyKey, storages, NEARBY_TTL);
         return storages;
     }
 
-    public List<ColdStorage> fetchNearbyColdStoragesByDistAndState(String district, String state, double lat, double lon) throws IOException {
+    public List<ColdStorage> fetchNearbyColdStoragesByDistAndState(String district, String state, double lat,
+            double lon) throws IOException {
         // Construct the Google Places API URL
-//        String url = UriComponentsBuilder.fromHttpUrl("https://maps.googleapis.com/maps/api/place/textsearch/json")
-//                .queryParam("query", "cold storage in " + district + ", " + state)
-//                .queryParam("location", lat + "," + lon)  // Biasing search results towards the provided location
-//                .queryParam("radius", 50000)  // 50 km radius
-//                .queryParam("key", googleMapsApiKey)
-//                .toUriString();
+        // String url =
+        // UriComponentsBuilder.fromHttpUrl("https://maps.googleapis.com/maps/api/place/textsearch/json")
+        // .queryParam("query", "cold storage in " + district + ", " + state)
+        // .queryParam("location", lat + "," + lon) // Biasing search results towards
+        // the provided location
+        // .queryParam("radius", 50000) // 50 km radius
+        // .queryParam("key", googleMapsApiKey)
+        // .toUriString();
+
+        String searchKey = "coldstorage:search:" + district + ":" + state;
+        List<ColdStorage> cachedSearch = cacheService.get(searchKey, List.class).orElse(null);
+        if (cachedSearch != null)
+            return cachedSearch;
 
         String encodedQuery = URLEncoder.encode("cold storage in " + district + ", " + state, StandardCharsets.UTF_8);
-        String url = "https://maps.googleapis.com/maps/api/place/textsearch/json?query=" + encodedQuery +"&type=storage&keyword=cold+storage,refrigeration+warehouse,frozen+storage"+ "&key=" + googleMapsApiKey;
-
+        String url = "https://maps.googleapis.com/maps/api/place/textsearch/json?query=" + encodedQuery
+                + "&type=storage&keyword=cold+storage,refrigeration+warehouse,frozen+storage" + "&key="
+                + googleMapsApiKey;
 
         System.out.println("Fetching from URL: " + url);
-        System.out.println(district+" "+ state);
+        System.out.println(district + " " + state);
 
         // Make API request
         String response = restTemplate.getForObject(url, String.class);
@@ -224,8 +248,9 @@ public class ColdStorageService {
 
         JsonNode results = root.get("results");
         if (results == null || !results.isArray() || results.isEmpty()) {
-            System.out.println("No cold storages found for " + district + ", " + state + ". Returning default response.");
-//            return fetchDefaultColdStorages(district, state); // Fallback mechanism
+            System.out
+                    .println("No cold storages found for " + district + ", " + state + ". Returning default response.");
+            // return fetchDefaultColdStorages(district, state); // Fallback mechanism
         }
 
         List<ColdStorage> storages = new ArrayList<>();
@@ -234,10 +259,8 @@ public class ColdStorageService {
             ColdStorage storage = null;
             if (!name.contains("ice cream") && !name.contains("cold drink") && !name.contains("dairy")) {
                 storage = parseColdStorageFromJson(place, lat, lon);
-//                storages.add(storage);
             }
 
-            // Check if already exists in DB to avoid duplicates
             if (storage != null) {
                 ColdStorage existing = coldStorageRepository.findByPlaceId(storage.getPlaceId()).orElse(null);
                 if (existing == null) {
@@ -249,21 +272,24 @@ public class ColdStorageService {
             }
         }
 
+        cacheService.save(searchKey, storages, NEARBY_TTL);
         return storages;
     }
 
-//    private List<ColdStorage> fetchDefaultColdStorages(String district, String state) {
-//        // Fetch from database or return predefined locations
-//        List<ColdStorage> defaultStorages = coldStorageRepository.findByDistrictAndState(district, state);
-//
-//        if (defaultStorages.isEmpty()) {
-//            System.out.println("No default cold storages found in DB. Returning empty list.");
-//            return new ArrayList<>();
-//        }
-//
-//        return defaultStorages;
-//    }
-
+    // private List<ColdStorage> fetchDefaultColdStorages(String district, String
+    // state) {
+    // // Fetch from database or return predefined locations
+    // List<ColdStorage> defaultStorages =
+    // coldStorageRepository.findByDistrictAndState(district, state);
+    //
+    // if (defaultStorages.isEmpty()) {
+    // System.out.println("No default cold storages found in DB. Returning empty
+    // list.");
+    // return new ArrayList<>();
+    // }
+    //
+    // return defaultStorages;
+    // }
 
     private ColdStorage parseColdStorageFromJson(JsonNode place, double userLat, double userLon) {
         ColdStorage storage = new ColdStorage();
@@ -296,7 +322,8 @@ public class ColdStorageService {
         }
 
         storage.setIcon(place.has("icon") ? place.get("icon").asText() : null);
-        storage.setIconBackgroundColor(place.has("icon_background_color") ? place.get("icon_background_color").asText() : null);
+        storage.setIconBackgroundColor(
+                place.has("icon_background_color") ? place.get("icon_background_color").asText() : null);
         storage.setIconMaskBaseUri(place.has("icon_mask_base_uri") ? place.get("icon_mask_base_uri").asText() : null);
 
         JsonNode openingHours = place.get("opening_hours");
@@ -325,7 +352,8 @@ public class ColdStorageService {
             storage.setTypes(String.join(",", typeList));
         }
 
-        storage.setPhoneNumber(place.has("formatted_phone_number") ? place.get("formatted_phone_number").asText() : "N/A");
+        storage.setPhoneNumber(
+                place.has("formatted_phone_number") ? place.get("formatted_phone_number").asText() : "N/A");
         storage.setTemperature("Unknown");
         storage.setSpecialty("General");
         storage.setCapacity("Unknown");
@@ -347,8 +375,13 @@ public class ColdStorageService {
     }
 
     public ColdStorage getColdStorageDetails(String placeId) {
-        return coldStorageRepository.findByPlaceId(placeId)
-                .orElseThrow(() -> new RuntimeException("Cold storage not found"));
+        String cacheKey = "coldstorage:" + placeId;
+        return cacheService.get(cacheKey, ColdStorage.class).orElseGet(() -> {
+            ColdStorage storage = coldStorageRepository.findByPlaceId(placeId)
+                    .orElseThrow(() -> new RuntimeException("Cold storage not found"));
+            cacheService.save(cacheKey, storage, STORAGE_TTL);
+            return storage;
+        });
     }
 
     public ColdStorage updateColdStorageDetails(String placeId, ColdStorage updatedStorage) {
@@ -357,7 +390,9 @@ public class ColdStorageService {
         existing.setTemperature(updatedStorage.getTemperature());
         existing.setSpecialty(updatedStorage.getSpecialty());
         existing.setCapacity(updatedStorage.getCapacity());
-        return coldStorageRepository.save(existing);
+        ColdStorage saved = coldStorageRepository.save(existing);
+        cacheService.evict("coldstorage:" + placeId);
+        return saved;
     }
 
     public ColdStorage bookColdStorage(String placeId) {

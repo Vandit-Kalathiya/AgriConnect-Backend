@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -37,16 +38,24 @@ public class ListingService {
     private final ListingRepository listingRepository;
     private final ImageRepository imageRepository;
     private final NotificationEventPublisher notificationEventPublisher;
+    private final CacheService cacheService;
+
+    private static final Duration LISTING_TTL = Duration.ofHours(2);
+    private static final Duration LIST_TTL = Duration.ofMinutes(30);
+    private static final String ALL_LISTINGS_KEY = "listings:all";
+    private static final String ACTIVE_LISTINGS_KEY = "listings:active";
 
     @Value("${notification.topics.market}")
     private String marketTopic;
 
     public ListingService(ListingRepository listingRepository,
-                          ImageRepository imageRepository,
-                          NotificationEventPublisher notificationEventPublisher) {
+            ImageRepository imageRepository,
+            NotificationEventPublisher notificationEventPublisher,
+            CacheService cacheService) {
         this.listingRepository = listingRepository;
         this.imageRepository = imageRepository;
         this.notificationEventPublisher = notificationEventPublisher;
+        this.cacheService = cacheService;
     }
 
     public Listing addListing(ListingRequest listingRequest, List<MultipartFile> images) {
@@ -61,29 +70,33 @@ public class ListingService {
             listing.setProductType(listingRequest.getProductType());
 
             // Convert and validate finalPrice
-            listing.setFinalPrice(listingRequest.getFinalPrice() != null ?
-                    Double.parseDouble(listingRequest.getFinalPrice()) : 0L);
+            listing.setFinalPrice(
+                    listingRequest.getFinalPrice() != null ? Double.parseDouble(listingRequest.getFinalPrice()) : 0L);
 
             // Set AI generated price (default to 0L)
-            listing.setAiGeneratedPrice(listingRequest.getAiGeneratedPrice() != null ? 
-                    Double.parseDouble(listingRequest.getAiGeneratedPrice()) : 0L);
+            listing.setAiGeneratedPrice(listingRequest.getAiGeneratedPrice() != null
+                    ? Double.parseDouble(listingRequest.getAiGeneratedPrice())
+                    : 0L);
 
             // Convert date strings to LocalDate with custom formatter
-            listing.setHarvestedDate(listingRequest.getHarvestedDate() != null && !listingRequest.getHarvestedDate().isEmpty() ?
-                    LocalDate.parse(listingRequest.getHarvestedDate(), DATE_FORMATTER) : null);
+            listing.setHarvestedDate(
+                    listingRequest.getHarvestedDate() != null && !listingRequest.getHarvestedDate().isEmpty()
+                            ? LocalDate.parse(listingRequest.getHarvestedDate(), DATE_FORMATTER)
+                            : null);
 
             listing.setStorageCondition(listingRequest.getStorageCondition());
 
             // Convert and validate quantity
-            listing.setQuantity(listingRequest.getQuantity() != null ?
-                    Long.parseLong(listingRequest.getQuantity()) : null);
+            listing.setQuantity(
+                    listingRequest.getQuantity() != null ? Long.parseLong(listingRequest.getQuantity()) : null);
 
             listing.setUnitOfQuantity(listingRequest.getUnitOfQuantity());
             listing.setLocation(listingRequest.getLocation());
 
             // Convert and validate shelfLifetime
-            listing.setShelfLifetime(listingRequest.getShelfLifetime() != null ?
-                    Long.parseLong(listingRequest.getShelfLifetime()) : null);
+            listing.setShelfLifetime(
+                    listingRequest.getShelfLifetime() != null ? Long.parseLong(listingRequest.getShelfLifetime())
+                            : null);
 
             listing.setContactOfFarmer(listingRequest.getContactOfFarmer());
 
@@ -120,27 +133,32 @@ public class ListingService {
             // Update listing with images
             listing = listingRepository.save(listing);
 
+            cacheService.evict(ALL_LISTINGS_KEY);
+            cacheService.evict(ACTIVE_LISTINGS_KEY);
+            cacheService.evict("listings:farmer:" + listing.getContactOfFarmer());
+
             try {
                 notificationEventPublisher.publish(marketTopic,
-                    notificationEventPublisher.buildEvent(
-                        "MARKET_LISTING_CREATED",
-                        listing.getContactOfFarmer(),
-                        "market.listing.created",
-                        List.of("IN_APP", "EMAIL"),
-                        Map.of(
-                            "listingId",   listing.getId(),
-                            "cropName",    listing.getProductName(),
-                            "quantity",    listing.getQuantity() + " " + (listing.getUnitOfQuantity() != null ? listing.getUnitOfQuantity() : ""),
-                            "listingDate", Instant.now().toString()
-                        ),
-                        Priority.NORMAL,
-                        listing.getId(),
-                        null,
-                        listing.getContactOfFarmer()
-                    )
-                );
+                        notificationEventPublisher.buildEvent(
+                                "MARKET_LISTING_CREATED",
+                                listing.getContactOfFarmer(),
+                                "market.listing.created",
+                                List.of("IN_APP", "EMAIL"),
+                                Map.of(
+                                        "listingId", listing.getId(),
+                                        "cropName", listing.getProductName(),
+                                        "quantity",
+                                        listing.getQuantity() + " "
+                                                + (listing.getUnitOfQuantity() != null ? listing.getUnitOfQuantity()
+                                                        : ""),
+                                        "listingDate", Instant.now().toString()),
+                                Priority.NORMAL,
+                                listing.getId(),
+                                null,
+                                listing.getContactOfFarmer()));
             } catch (Exception ex) {
-                log.warn("[NOTIFY] Failed to publish MARKET_LISTING_CREATED for listing={}: {}", listing.getId(), ex.getMessage());
+                log.warn("[NOTIFY] Failed to publish MARKET_LISTING_CREATED for listing={}: {}", listing.getId(),
+                        ex.getMessage());
             }
 
             log.info("Listing added successfully with ID: {}", listing.getId());
@@ -222,7 +240,12 @@ public class ListingService {
                 }
             }
 
-            return listingRepository.save(existingListing);
+            Listing updated = listingRepository.save(existingListing);
+            cacheService.evict("listing:" + listingId);
+            cacheService.evict(ALL_LISTINGS_KEY);
+            cacheService.evict(ACTIVE_LISTINGS_KEY);
+            cacheService.evict("listings:farmer:" + updated.getContactOfFarmer());
+            return updated;
 
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid number format in listing request", e);
@@ -235,8 +258,13 @@ public class ListingService {
 
     public Listing getListingById(String listingId) {
         log.debug("Fetching listing with ID: {}", listingId);
-        return listingRepository.findById(listingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
+        String cacheKey = "listing:" + listingId;
+        return cacheService.get(cacheKey, Listing.class).orElseGet(() -> {
+            Listing listing = listingRepository.findById(listingId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
+            cacheService.save(cacheKey, listing, LISTING_TTL);
+            return listing;
+        });
     }
 
     public List<byte[]> getListingImages(String listingId) {
@@ -253,7 +281,11 @@ public class ListingService {
 
     public List<Listing> getAllListings() {
         log.debug("Fetching all listings");
-        return listingRepository.findAll(); 
+        return cacheService.get(ALL_LISTINGS_KEY, List.class).orElseGet(() -> {
+            List<Listing> listings = listingRepository.findAll();
+            cacheService.save(ALL_LISTINGS_KEY, listings, LIST_TTL);
+            return listings;
+        });
     }
 
     public void deleteListing(String listingId) {
@@ -261,32 +293,33 @@ public class ListingService {
         Listing listing = listingRepository.findById(listingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
 
-        // Delete associated images
         if (!listing.getImages().isEmpty()) {
             imageRepository.deleteAll(listing.getImages());
         }
 
         listingRepository.deleteById(listingId);
+        cacheService.evict("listing:" + listingId);
+        cacheService.evict(ALL_LISTINGS_KEY);
+        cacheService.evict(ACTIVE_LISTINGS_KEY);
+        cacheService.evict("listings:farmer:" + listing.getContactOfFarmer());
 
         try {
             notificationEventPublisher.publish(marketTopic,
-                notificationEventPublisher.buildEvent(
-                    "MARKET_LISTING_DELETED",
-                    listing.getContactOfFarmer(),
-                    "market.listing.deleted",
-                    List.of("IN_APP"),
-                    Map.of(
-                        "listingId", listingId,
-                        "cropName",  listing.getProductName()
-                    ),
-                    Priority.LOW,
-                    listingId,
-                    null,
-                    listing.getContactOfFarmer()
-                )
-            );
+                    notificationEventPublisher.buildEvent(
+                            "MARKET_LISTING_DELETED",
+                            listing.getContactOfFarmer(),
+                            "market.listing.deleted",
+                            List.of("IN_APP"),
+                            Map.of(
+                                    "listingId", listingId,
+                                    "cropName", listing.getProductName()),
+                            Priority.LOW,
+                            listingId,
+                            null,
+                            listing.getContactOfFarmer()));
         } catch (Exception ex) {
-            log.warn("[NOTIFY] Failed to publish MARKET_LISTING_DELETED for listing={}: {}", listingId, ex.getMessage());
+            log.warn("[NOTIFY] Failed to publish MARKET_LISTING_DELETED for listing={}: {}", listingId,
+                    ex.getMessage());
         }
 
         log.info("Listing deleted successfully with ID: {}", listingId);
@@ -294,15 +327,15 @@ public class ListingService {
 
     public Listing updateListingStatus(String listingId, String status, String quantity) {
         log.info("Updating status for listing ID: {} to status: {}", listingId, status);
-        
+
         Listing existingListing = listingRepository.findById(listingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
-        
+
         long quantityValue = Long.parseLong(quantity);
         long updatedQuantity = existingListing.getQuantity() - quantityValue;
-        
+
         existingListing.setQuantity(Math.max(0, updatedQuantity));
-        
+
         if (updatedQuantity <= 0) {
             if (status.equalsIgnoreCase("archived")) {
                 existingListing.setStatus(String.valueOf(ListingStatus.ARCHIVED));
@@ -310,8 +343,12 @@ public class ListingService {
                 existingListing.setStatus(String.valueOf(ListingStatus.PURCHASED));
             }
         }
-        
+
         Listing updated = listingRepository.save(existingListing);
+        cacheService.evict("listing:" + listingId);
+        cacheService.evict(ALL_LISTINGS_KEY);
+        cacheService.evict(ACTIVE_LISTINGS_KEY);
+        cacheService.evict("listings:farmer:" + updated.getContactOfFarmer());
         log.info("Listing status updated successfully for ID: {}", listingId);
 
         try {
@@ -321,23 +358,20 @@ public class ListingService {
             Priority priority = isSold ? Priority.HIGH : Priority.NORMAL;
 
             notificationEventPublisher.publish(marketTopic,
-                notificationEventPublisher.buildEvent(
-                    eventType,
-                    updated.getContactOfFarmer(),
-                    templateId,
-                    isSold ? List.of("EMAIL", "IN_APP") : List.of("IN_APP"),
-                    Map.of(
-                        "listingId",     updated.getId(),
-                        "cropName",      updated.getProductName(),
-                        "purchasedQty",  String.valueOf(quantityValue),
-                        "remainingQty",  String.valueOf(updated.getQuantity())
-                    ),
-                    priority,
-                    listingId,
-                    null,
-                    updated.getContactOfFarmer()
-                )
-            );
+                    notificationEventPublisher.buildEvent(
+                            eventType,
+                            updated.getContactOfFarmer(),
+                            templateId,
+                            isSold ? List.of("EMAIL", "IN_APP") : List.of("IN_APP"),
+                            Map.of(
+                                    "listingId", updated.getId(),
+                                    "cropName", updated.getProductName(),
+                                    "purchasedQty", String.valueOf(quantityValue),
+                                    "remainingQty", String.valueOf(updated.getQuantity())),
+                            priority,
+                            listingId,
+                            null,
+                            updated.getContactOfFarmer()));
         } catch (Exception ex) {
             log.warn("[NOTIFY] Failed to publish listing status event for listing={}: {}", listingId, ex.getMessage());
         }
@@ -347,12 +381,21 @@ public class ListingService {
 
     public List<Listing> getActiveListings() {
         log.debug("Fetching active listings");
-        return listingRepository.findActiveListings();
+        return cacheService.get(ACTIVE_LISTINGS_KEY, List.class).orElseGet(() -> {
+            List<Listing> listings = listingRepository.findActiveListings();
+            cacheService.save(ACTIVE_LISTINGS_KEY, listings, LIST_TTL);
+            return listings;
+        });
     }
 
     public List<Listing> getListingByFarmerContact(String farmerContact) {
         log.debug("Fetching listings for farmer contact: {}", farmerContact);
-        return listingRepository.findByContactOfFarmer(farmerContact)
-                .orElseThrow(() -> new ResourceNotFoundException("Listing", "farmerContact", farmerContact));
+        String cacheKey = "listings:farmer:" + farmerContact;
+        return cacheService.get(cacheKey, List.class).orElseGet(() -> {
+            List<Listing> listings = listingRepository.findByContactOfFarmer(farmerContact)
+                    .orElseThrow(() -> new ResourceNotFoundException("Listing", "farmerContact", farmerContact));
+            cacheService.save(cacheKey, listings, Duration.ofHours(1));
+            return listings;
+        });
     }
 }
