@@ -78,6 +78,20 @@ spring:
       schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
       transactional.id: ${spring.application.name}-tx
 
+  # ── Redis Configuration (Local Development) ────────────────────────────────────
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 5
+          min-idle: 2
+          max-wait: 500ms
+
 # ── CORS ─────────────────────────────────────────────────────────────────────
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5000,http://localhost:5174,http://localhost:1819}
@@ -127,14 +141,28 @@ jwt:
   expiration: ${JWT_EXPIRATION:604800000}
 
 # ── Feature Flags ─────────────────────────────────────────────────────────────
-# FEATURE_MOBILE_VERIFICATION_ENABLED=true  → registration verify requires
-#   both email OTP and mobile OTP.
-# FEATURE_MOBILE_VERIFICATION_ENABLED=false → registration verify requires
-#   only email OTP.
-# Mirror this flag in frontend .env as: VITE_FEATURE_MOBILE_VERIFICATION_ENABLED
+# FEATURE_MOBILE_VERIFICATION_ENABLED: controls dual OTP (email+mobile) on registration
+# FEATURE_KAFKA_ENABLED: set true only when Kafka + Schema Registry are running locally
+# CACHE_LOCAL_ENABLED / redis.enabled: set true only when Redis is running locally
+# Mirror all flags in frontend .env as VITE_FEATURE_<NAME>
 feature:
   mobile-verification:
     enabled: ${FEATURE_MOBILE_VERIFICATION_ENABLED:true}
+  kafka:
+    enabled: ${FEATURE_KAFKA_ENABLED:false}
+
+# ── Caching Configuration ─────────────────────────────────────────────────────
+# Local: Use Redis with cache.local.enabled=true
+# Production: Use Valkey with cache.prod.enabled=true
+cache:
+  local:
+    enabled: ${CACHE_LOCAL_ENABLED:false} # Redis for local development
+  prod:
+    enabled: ${CACHE_PROD_ENABLED:false} # Valkey for production
+
+# Derived flag for internal use (auto-calculated)
+redis:
+  enabled: ${CACHE_LOCAL_ENABLED:false}
 
 # ── Circuit Breaker (Resilience4j) ───────────────────────────────────────────
 resilience4j:
@@ -223,6 +251,36 @@ notification:
     auth: agriconnect.notifications.auth
 
 ---
+# ── Production profile — AWS ElastiCache Valkey with TLS ──────────────────────
+spring:
+  config:
+    activate:
+      on-profile: prod
+  data:
+    redis:
+      url: ${VALKEY_URL} # e.g., rediss://your-valkey-cluster.cache.amazonaws.com:6379
+      password: ${VALKEY_PASSWORD:}
+      ssl:
+        enabled: true
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: 500ms
+
+# Override cache flags for production
+cache:
+  local:
+    enabled: false # Disable Redis in production
+  prod:
+    enabled: ${CACHE_PROD_ENABLED:true} # Enable Valkey in production
+
+redis:
+  enabled: ${CACHE_LOCAL_ENABLED:true}
+
+---
 # ── Production-Secure profile — SASL_SSL ─────────────────────────────────────
 spring:
   config:
@@ -250,4 +308,3 @@ logging:
     org.springframework.cloud.gateway: ${LOG_LEVEL_GATEWAY:INFO}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
-

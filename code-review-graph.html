@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgriConnect Backend — Code Review Graph</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #21262d;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+
+      --c-service:  #2ea043;
+      --c-infra:    #e3b341;
+      --c-topic:    #a371f7;
+      --c-gateway:  #58a6ff;
+      --c-eureka:   #f78166;
+      --c-produce:  #3fb950;
+      --c-consume:  #a371f7;
+      --c-route:    #58a6ff;
+      --c-register: #f78166;
+      --c-cache:    #e3b341;
+      --c-observe:  #79c0ff;
+    }
+
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+    body { background: var(--bg); color: var(--text); display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── HEADER ─────────────────────────────────────────────────────────── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, #2ea043, #58a6ff);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .logo-text h1 { font-size: 15px; font-weight: 600; }
+    .logo-text p { font-size: 11px; color: var(--muted); }
+
+    .tabs { display: flex; gap: 4px; margin-left: auto; }
+    .tab {
+      padding: 6px 14px; border-radius: 6px; border: 1px solid transparent;
+      font-size: 12px; font-weight: 500; cursor: pointer; transition: all .15s;
+      background: transparent; color: var(--muted);
+    }
+    .tab:hover { background: var(--surface2); color: var(--text); }
+    .tab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+
+    .stats { display: flex; gap: 16px; margin-left: 16px; }
+    .stat { text-align: center; }
+    .stat-val { font-size: 18px; font-weight: 700; color: var(--accent); }
+    .stat-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+
+    /* ── MAIN LAYOUT ─────────────────────────────────────────────────────── */
+    .layout { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── SIDEBAR LEFT (Legend + Filters) ─────────────────────────────────── */
+    .sidebar-left {
+      width: 200px; flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 14px;
+      display: flex; flex-direction: column; gap: 18px;
+    }
+
+    .legend h3, .filter-section h3 {
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .7px; margin-bottom: 8px;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; margin-bottom: 5px; cursor: pointer;
+      padding: 3px 6px; border-radius: 4px; transition: background .1s;
+    }
+    .legend-item:hover { background: var(--surface2); }
+    .legend-item.dimmed { opacity: .4; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    .filter-btn {
+      width: 100%; padding: 5px 10px; border-radius: 5px;
+      border: 1px solid var(--border); background: var(--surface2);
+      color: var(--text); font-size: 11px; cursor: pointer; margin-bottom: 4px;
+      text-align: left; transition: border-color .15s;
+    }
+    .filter-btn:hover { border-color: var(--accent); }
+    .filter-btn.active { border-color: var(--accent); background: rgba(88,166,255,.1); }
+
+    .divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+    /* ── CANVAS ──────────────────────────────────────────────────────────── */
+    .canvas-wrap {
+      flex: 1; position: relative; overflow: hidden;
+    }
+    svg { width: 100%; height: 100%; }
+
+    /* ── SIDEBAR RIGHT (Details) ─────────────────────────────────────────── */
+    .sidebar-right {
+      width: 0; flex-shrink: 0;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      overflow: hidden;
+      transition: width .2s ease;
+    }
+    .sidebar-right.open { width: 280px; }
+    .details-inner { padding: 16px; width: 280px; }
+    .details-close {
+      float: right; background: none; border: none;
+      color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1;
+    }
+    .details-close:hover { color: var(--text); }
+    .details-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 12px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      margin-bottom: 10px; letter-spacing: .5px;
+    }
+    .details-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; word-break: break-word; }
+    .details-sub { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+    .details-section { margin-bottom: 12px; }
+    .details-section h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .details-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+    .details-row:last-child { border-bottom: none; }
+    .details-key { color: var(--muted); }
+    .details-val { color: var(--text); font-weight: 500; }
+    .endpoint-list { list-style: none; }
+    .endpoint-item {
+      font-size: 11px; padding: 3px 0; border-bottom: 1px solid var(--border);
+      display: flex; gap: 6px; align-items: baseline;
+    }
+    .endpoint-item:last-child { border-bottom: none; }
+    .method {
+      font-size: 9px; font-weight: 700; padding: 1px 4px;
+      border-radius: 3px; flex-shrink: 0;
+    }
+    .method.GET { background: rgba(63,185,80,.2); color: #3fb950; }
+    .method.POST { background: rgba(88,166,255,.2); color: #58a6ff; }
+    .method.PUT { background: rgba(227,179,65,.2); color: #e3b341; }
+    .method.PATCH { background: rgba(163,113,247,.2); color: #a371f7; }
+    .method.DELETE { background: rgba(248,81,73,.2); color: #f85149; }
+    .endpoint-path { color: var(--text); font-family: monospace; word-break: break-all; }
+    .conn-item {
+      font-size: 11px; padding: 3px 6px; margin-bottom: 3px;
+      background: var(--surface2); border-radius: 4px; display: flex; align-items: center; gap: 6px;
+    }
+    .conn-arrow { color: var(--muted); }
+
+    /* ── D3 Styles ───────────────────────────────────────────────────────── */
+    .link { stroke-opacity: .55; stroke-linecap: round; }
+    .link:hover { stroke-opacity: 1; }
+    .node circle { cursor: pointer; stroke-width: 2; transition: r .15s; }
+    .node circle:hover { stroke-width: 3; }
+    .node text {
+      pointer-events: none; user-select: none;
+      fill: var(--text); font-size: 11px;
+      text-shadow: 0 0 4px #0d1117, 0 0 4px #0d1117;
+    }
+    .node.selected circle { stroke-width: 3 !important; filter: drop-shadow(0 0 6px currentColor); }
+
+    .tooltip {
+      position: absolute; pointer-events: none;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 10px; font-size: 12px;
+      opacity: 0; transition: opacity .1s;
+      max-width: 200px; z-index: 100;
+    }
+    .tooltip.show { opacity: 1; }
+    .tooltip-title { font-weight: 600; margin-bottom: 3px; }
+    .tooltip-body { color: var(--muted); font-size: 11px; }
+
+    /* ── Controls ────────────────────────────────────────────────────────── */
+    .controls {
+      position: absolute; bottom: 16px; right: 16px;
+      display: flex; flex-direction: column; gap: 4px; z-index: 20;
+    }
+    .ctrl-btn {
+      width: 32px; height: 32px; border-radius: 6px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color .15s;
+    }
+    .ctrl-btn:hover { border-color: var(--accent); }
+
+    /* ── Edge labels ─────────────────────────────────────────────────────── */
+    .edge-label {
+      pointer-events: none; user-select: none;
+      fill: var(--muted); font-size: 9px;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🌾</div>
+    <div class="logo-text">
+      <h1>AgriConnect Backend</h1>
+      <p>Code Review Graph</p>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="all" onclick="setView('all', this)">All</button>
+    <button class="tab" data-view="services" onclick="setView('services', this)">Services</button>
+    <button class="tab" data-view="kafka" onclick="setView('kafka', this)">Kafka Flow</button>
+    <button class="tab" data-view="routing" onclick="setView('routing', this)">API Routes</button>
+    <button class="tab" data-view="infra" onclick="setView('infra', this)">Infrastructure</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-val">6</div><div class="stat-lbl">Services</div></div>
+    <div class="stat"><div class="stat-val">5</div><div class="stat-lbl">Topics</div></div>
+    <div class="stat"><div class="stat-val">6</div><div class="stat-lbl">Infra</div></div>
+    <div class="stat"><div class="stat-val">38</div><div class="stat-lbl">Endpoints</div></div>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- LEFT SIDEBAR -->
+  <div class="sidebar-left">
+    <div class="legend">
+      <h3>Node Types</h3>
+      <div class="legend-item" onclick="toggleType('service')">
+        <div class="legend-dot" style="background:#2ea043"></div> Microservice
+      </div>
+      <div class="legend-item" onclick="toggleType('gateway')">
+        <div class="legend-dot" style="background:#58a6ff"></div> API Gateway
+      </div>
+      <div class="legend-item" onclick="toggleType('eureka')">
+        <div class="legend-dot" style="background:#f78166"></div> Eureka Server
+      </div>
+      <div class="legend-item" onclick="toggleType('topic')">
+        <div class="legend-dot" style="background:#a371f7"></div> Kafka Topic
+      </div>
+      <div class="legend-item" onclick="toggleType('infra')">
+        <div class="legend-dot" style="background:#e3b341"></div> Infrastructure
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="legend">
+      <h3>Edge Types</h3>
+      <div class="legend-item">
+        <div style="width:20px;height:2px;background:#3fb950"></div> Produces
+      </div>
+      <div class="legend-item">
+        <div style="width:20px;height:2px;background:#a371f7"></div> Consumes
+      </div>
+      <div class="legend-item">
+        <div style="width:20px;height:2px;background:#58a6ff"></div> HTTP Route
+      </div>
+      <div class="legend-item">
+        <div style="width:20px;height:2px;background:#f78166"></div> Registers
+      </div>
+      <div class="legend-item">
+        <div style="width:20px;height:2px;background:#e3b341;opacity:.6"></div> Cache
+      </div>
+      <div class="legend-item">
+        <div style="width:20px;height:2px;background:#79c0ff;opacity:.6"></div> Observability
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="filter-section">
+      <h3>Quick Focus</h3>
+      <button class="filter-btn active" onclick="focusGroup('all', this)">Show All</button>
+      <button class="filter-btn" onclick="focusGroup('core', this)">Core Services</button>
+      <button class="filter-btn" onclick="focusGroup('events', this)">Event Pipeline</button>
+      <button class="filter-btn" onclick="focusGroup('monitoring', this)">Monitoring</button>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div class="canvas-wrap">
+    <svg id="graph"></svg>
+    <div class="tooltip" id="tooltip">
+      <div class="tooltip-title" id="tt-title"></div>
+      <div class="tooltip-body" id="tt-body"></div>
+    </div>
+    <div class="controls">
+      <button class="ctrl-btn" title="Zoom In" onclick="zoomIn()">+</button>
+      <button class="ctrl-btn" title="Zoom Out" onclick="zoomOut()">−</button>
+      <button class="ctrl-btn" title="Reset" onclick="resetZoom()" style="font-size:12px">⌂</button>
+    </div>
+  </div>
+
+  <!-- RIGHT SIDEBAR (Details) -->
+  <div class="sidebar-right" id="details-panel">
+    <div class="details-inner" id="details-inner">
+      <!-- filled by JS -->
+    </div>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   GRAPH DATA
+════════════════════════════════════════════════════════════════════════════ */
+const NODES = [
+  /* ── GATEWAY ───────────────────────────────────── */
+  {
+    id: 'api-gateway', type: 'gateway', label: 'API Gateway',
+    port: 8080, desc: 'Central entry point — JWT auth, routing, Redis caching, Kafka outbox',
+    tech: ['Spring Boot 3', 'Spring Cloud Gateway MVC', 'Spring Security', 'Redis', 'Kafka'],
+    endpoints: [
+      { method: 'POST', path: '/auth/register' },
+      { method: 'POST', path: '/auth/register/verify' },
+      { method: 'POST', path: '/auth/login' },
+      { method: 'GET',  path: '/auth/current-user' },
+      { method: 'POST', path: '/auth/logout' },
+      { method: 'POST', path: '/auth/password-reset/initiate' },
+      { method: 'POST', path: '/auth/password-reset/verify' },
+      { method: 'GET',  path: '/users/{id}' },
+      { method: 'PUT',  path: '/users/{id}' },
+      { method: 'DELETE', path: '/users/{id}' },
+    ],
+    routes: [
+      '/contract-farming/** → Contract-Farming-App',
+      '/market/**          → Market-Access-App',
+      '/agreement/**       → Generate-Agreement-App',
+      '/notifications/**   → Notification-Service',
+    ],
+    entities: ['User', 'BlackListedToken', 'Session', 'Token', 'NotificationOutboxEntry'],
+    produces: ['agriconnect.notifications.auth'],
+    group: ['core'],
+  },
+
+  /* ── MICROSERVICES ─────────────────────────────── */
+  {
+    id: 'contract-farming', type: 'service', label: 'Contract Farming',
+    port: 2526, desc: 'Manages agreements, orders and Razorpay payments with blockchain hash verification',
+    tech: ['Spring Boot 3', 'MongoDB', 'Razorpay', 'SHA-256', 'Kafka', 'Redis'],
+    endpoints: [
+      { method: 'POST', path: '/upload/{farmerAddr}/{buyerAddr}' },
+      { method: 'GET',  path: '/download/{pdfHash}' },
+      { method: 'GET',  path: '/download/t/{txHash}' },
+      { method: 'GET',  path: '/get/{orderId}' },
+      { method: 'GET',  path: '/user/agreements/{userId}/paginated' },
+      { method: 'GET',  path: '/paginated' },
+      { method: 'POST', path: '/orders/create' },
+      { method: 'GET',  path: '/orders/{id}' },
+      { method: 'GET',  path: '/orders/paginated' },
+      { method: 'GET',  path: '/orders/u/{userId}/paginated' },
+      { method: 'GET',  path: '/orders/buyer/{buyerAddr}/paginated' },
+      { method: 'GET',  path: '/orders/farmer/{farmerAddr}/paginated' },
+      { method: 'POST', path: '/payments/create-order' },
+      { method: 'POST', path: '/payments/verify' },
+    ],
+    entities: ['Agreement', 'Order', 'AgreementDetails', 'Payment'],
+    produces: ['agriconnect.notifications.contract'],
+    group: ['core'],
+  },
+  {
+    id: 'market-access', type: 'service', label: 'Market Access',
+    port: 2527, desc: 'Marketplace for produce listings with embedded AI assistant (Kisan Mitra / crop advisory)',
+    tech: ['Spring Boot 3', 'PostgreSQL', 'Kafka', 'Redis', 'OpenAI / Gemini', 'Swagger'],
+    endpoints: [
+      { method: 'POST',   path: '/listings/add' },
+      { method: 'PUT',    path: '/listings/update/{id}' },
+      { method: 'GET',    path: '/listings/get/{id}' },
+      { method: 'GET',    path: '/listings/all' },
+      { method: 'GET',    path: '/listings/all/active' },
+      { method: 'DELETE', path: '/listings/delete/{id}' },
+      { method: 'PUT',    path: '/listings/{id}/{status}/{qty}' },
+      { method: 'GET',    path: '/listings/user/{contact}' },
+      { method: 'POST',   path: '/api/v1/ai/chat/respond' },
+      { method: 'POST',   path: '/api/v1/ai/advisory/crop' },
+      { method: 'POST',   path: '/api/v1/ai/market/analyse' },
+      { method: 'POST',   path: '/api/v1/ai/listing/assist' },
+      { method: 'GET',    path: '/api/v1/ai/history/conversations' },
+    ],
+    entities: ['Listing', 'Image', 'AiConversationEntity', 'KisanMitraHistoryEntity', 'CropAdvisoryHistoryEntity'],
+    produces: ['agriconnect.notifications.market'],
+    group: ['core'],
+  },
+  {
+    id: 'generate-agreement', type: 'service', label: 'Generate Agreement',
+    port: 2529, desc: 'PDF contract generation and cold-storage discovery/booking service',
+    tech: ['Spring Boot 3', 'MongoDB', 'iText PDF', 'Google Places API', 'Kafka', 'Redis'],
+    endpoints: [
+      { method: 'POST', path: '/contracts/generate' },
+      { method: 'POST', path: '/coldStorage/book' },
+      { method: 'PUT',  path: '/coldStorage/approve/{bookingId}' },
+      { method: 'GET',  path: '/coldStorage/bookings' },
+      { method: 'GET',  path: '/coldStorage/nearby' },
+      { method: 'GET',  path: '/coldStorage/nearby/d/s' },
+      { method: 'GET',  path: '/coldStorage/{placeId}' },
+      { method: 'PUT',  path: '/coldStorage/{placeId}' },
+      { method: 'POST', path: '/coldStorage/{placeId}/book' },
+    ],
+    entities: ['ContractRequest', 'ColdStorage', 'Booking'],
+    produces: ['agriconnect.notifications.agreement'],
+    group: ['core'],
+  },
+  {
+    id: 'notification-service', type: 'service', label: 'Notification Service',
+    port: 2530, desc: 'Multi-channel notification dispatch — Email, SMS, In-App, Push, WebSocket with DLQ retry',
+    tech: ['Spring Boot 3', 'PostgreSQL', 'Kafka Consumer', 'Redis', 'WebSocket', 'SendGrid', 'Twilio', 'FCM'],
+    endpoints: [
+      { method: 'GET',    path: '/api/notifications' },
+      { method: 'GET',    path: '/api/notifications/unread-count' },
+      { method: 'PATCH',  path: '/api/notifications/{id}/read' },
+      { method: 'PATCH',  path: '/api/notifications/read-all' },
+      { method: 'DELETE', path: '/api/notifications/{id}' },
+      { method: 'GET',    path: '/api/notifications/stats' },
+    ],
+    entities: ['Notification', 'NotificationDeliveryLog', 'NotificationStatus'],
+    consumes: ['agriconnect.notifications.auth', 'agriconnect.notifications.market',
+               'agriconnect.notifications.contract', 'agriconnect.notifications.agreement',
+               'agriconnect.notifications.dlq'],
+    dispatchers: ['EmailDispatcher', 'SmsDispatcher', 'InAppDispatcher', 'PushDispatcher'],
+    group: ['core', 'events'],
+  },
+
+  /* ── EUREKA ─────────────────────────────────────── */
+  {
+    id: 'eureka', type: 'eureka', label: 'Eureka Server',
+    port: 8761, desc: 'Netflix Eureka service registry — all microservices register here for load-balanced discovery',
+    tech: ['Spring Cloud Netflix Eureka'],
+    group: ['core'],
+  },
+
+  /* ── KAFKA TOPICS ───────────────────────────────── */
+  {
+    id: 'topic-auth', type: 'topic', label: 'notifications.auth',
+    desc: 'Auth events: registration OTP, login alerts, password resets (6 partitions)',
+    partitions: 6, group: ['events'],
+  },
+  {
+    id: 'topic-market', type: 'topic', label: 'notifications.market',
+    desc: 'Market events: listing created/updated, order placed (6 partitions)',
+    partitions: 6, group: ['events'],
+  },
+  {
+    id: 'topic-contract', type: 'topic', label: 'notifications.contract',
+    desc: 'Contract events: agreement uploaded, payment verified (6 partitions)',
+    partitions: 6, group: ['events'],
+  },
+  {
+    id: 'topic-agreement', type: 'topic', label: 'notifications.agreement',
+    desc: 'Agreement generation events: PDF generated, cold-storage booked (6 partitions)',
+    partitions: 6, group: ['events'],
+  },
+  {
+    id: 'topic-dlq', type: 'topic', label: 'notifications.dlq',
+    desc: 'Dead-letter queue for failed notification events (3 partitions)',
+    partitions: 3, group: ['events'],
+  },
+
+  /* ── INFRASTRUCTURE ─────────────────────────────── */
+  {
+    id: 'kafka', type: 'infra', label: 'Kafka (KRaft)',
+    port: 9092, desc: 'Event streaming — KRaft mode (no ZooKeeper), exactly-once delivery via transactions',
+    tech: ['Confluent Kafka 7.7.1', 'KRaft', 'Avro'],
+    group: ['events', 'infra'],
+  },
+  {
+    id: 'schema-registry', type: 'infra', label: 'Schema Registry',
+    port: 8081, desc: 'Confluent Schema Registry — Avro schema management for NotificationEvent',
+    tech: ['Confluent Schema Registry 7.7.1'],
+    group: ['events', 'infra'],
+  },
+  {
+    id: 'redis', type: 'infra', label: 'Redis',
+    port: 6379, desc: 'Cache layer — token blacklist, user sessions, service-level caches. ElastiCache Valkey in prod.',
+    tech: ['Redis 7 Alpine', 'AWS ElastiCache Valkey (prod)'],
+    group: ['infra'],
+  },
+  {
+    id: 'prometheus', type: 'infra', label: 'Prometheus',
+    port: 9090, desc: 'Metrics collection via Spring Actuator /prometheus endpoints from all services',
+    tech: ['Prometheus', 'Spring Boot Actuator'],
+    group: ['monitoring', 'infra'],
+  },
+  {
+    id: 'grafana', type: 'infra', label: 'Grafana',
+    port: 3000, desc: 'Dashboards and alerting backed by Prometheus datasource',
+    tech: ['Grafana'],
+    group: ['monitoring', 'infra'],
+  },
+  {
+    id: 'kafka-ui', type: 'infra', label: 'Kafka UI',
+    port: 8090, desc: 'Provectus Kafka UI — topic/consumer group inspection and message browsing',
+    tech: ['Provectus Kafka UI'],
+    group: ['monitoring', 'infra'],
+  },
+];
+
+const LINKS = [
+  /* ── Service Registration ──────────────────────── */
+  { source: 'api-gateway',        target: 'eureka',      type: 'register', label: 'register' },
+  { source: 'contract-farming',   target: 'eureka',      type: 'register', label: 'register' },
+  { source: 'market-access',      target: 'eureka',      type: 'register', label: 'register' },
+  { source: 'generate-agreement', target: 'eureka',      type: 'register', label: 'register' },
+  { source: 'notification-service', target: 'eureka',    type: 'register', label: 'register' },
+
+  /* ── API Gateway HTTP Routes ───────────────────── */
+  { source: 'api-gateway', target: 'contract-farming',   type: 'route', label: '/contract-farming/**' },
+  { source: 'api-gateway', target: 'market-access',      type: 'route', label: '/market/**' },
+  { source: 'api-gateway', target: 'generate-agreement', type: 'route', label: '/agreement/**' },
+  { source: 'api-gateway', target: 'notification-service', type: 'route', label: '/notifications/**' },
+
+  /* ── Kafka: Produce ────────────────────────────── */
+  { source: 'api-gateway',        target: 'topic-auth',      type: 'produce', label: 'produce' },
+  { source: 'contract-farming',   target: 'topic-contract',  type: 'produce', label: 'produce' },
+  { source: 'market-access',      target: 'topic-market',    type: 'produce', label: 'produce' },
+  { source: 'generate-agreement', target: 'topic-agreement', type: 'produce', label: 'produce' },
+
+  /* ── Kafka: Consume ────────────────────────────── */
+  { source: 'topic-auth',         target: 'notification-service', type: 'consume', label: 'consume' },
+  { source: 'topic-market',       target: 'notification-service', type: 'consume', label: 'consume' },
+  { source: 'topic-contract',     target: 'notification-service', type: 'consume', label: 'consume' },
+  { source: 'topic-agreement',    target: 'notification-service', type: 'consume', label: 'consume' },
+  { source: 'topic-dlq',          target: 'notification-service', type: 'consume', label: 'DLQ retry' },
+
+  /* ── All services → Kafka broker ──────────────── */
+  { source: 'api-gateway',        target: 'kafka',  type: 'infra-conn', label: '' },
+  { source: 'contract-farming',   target: 'kafka',  type: 'infra-conn', label: '' },
+  { source: 'market-access',      target: 'kafka',  type: 'infra-conn', label: '' },
+  { source: 'generate-agreement', target: 'kafka',  type: 'infra-conn', label: '' },
+  { source: 'notification-service', target: 'kafka', type: 'infra-conn', label: '' },
+
+  /* ── Schema Registry ────────────────────────────── */
+  { source: 'kafka',              target: 'schema-registry', type: 'infra-conn', label: '' },
+
+  /* ── Redis Cache ────────────────────────────────── */
+  { source: 'api-gateway',        target: 'redis',  type: 'cache', label: 'cache' },
+  { source: 'contract-farming',   target: 'redis',  type: 'cache', label: 'cache' },
+  { source: 'market-access',      target: 'redis',  type: 'cache', label: 'cache' },
+  { source: 'generate-agreement', target: 'redis',  type: 'cache', label: 'cache' },
+  { source: 'notification-service', target: 'redis', type: 'cache', label: 'cache' },
+
+  /* ── Observability ──────────────────────────────── */
+  { source: 'prometheus',  target: 'api-gateway',         type: 'observe', label: 'scrape' },
+  { source: 'prometheus',  target: 'contract-farming',    type: 'observe', label: 'scrape' },
+  { source: 'prometheus',  target: 'market-access',       type: 'observe', label: 'scrape' },
+  { source: 'prometheus',  target: 'generate-agreement',  type: 'observe', label: 'scrape' },
+  { source: 'prometheus',  target: 'notification-service', type: 'observe', label: 'scrape' },
+  { source: 'grafana',     target: 'prometheus',          type: 'observe', label: 'datasource' },
+  { source: 'kafka-ui',    target: 'kafka',               type: 'observe', label: 'manage' },
+  { source: 'kafka-ui',    target: 'schema-registry',     type: 'observe', label: 'manage' },
+];
+
+/* ════════════════════════════════════════════════════════════════════════════
+   COLOUR MAP
+════════════════════════════════════════════════════════════════════════════ */
+const NODE_COLORS = {
+  gateway:  '#58a6ff',
+  service:  '#2ea043',
+  eureka:   '#f78166',
+  topic:    '#a371f7',
+  infra:    '#e3b341',
+};
+const LINK_COLORS = {
+  route:      '#58a6ff',
+  produce:    '#3fb950',
+  consume:    '#a371f7',
+  register:   '#f78166',
+  cache:      '#e3b341',
+  observe:    '#79c0ff',
+  'infra-conn': '#4a5568',
+};
+const NODE_RADII = {
+  gateway: 28, service: 22, eureka: 20, topic: 14, infra: 18,
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   VIEW FILTERS
+════════════════════════════════════════════════════════════════════════════ */
+const VIEWS = {
+  all:      { nodes: null, linkTypes: null },
+  services: { nodes: ['gateway','service','eureka'], linkTypes: ['route','register'] },
+  kafka:    { nodes: ['gateway','service','topic','infra'], linkTypes: ['produce','consume','infra-conn'] },
+  routing:  { nodes: ['gateway','service','eureka'], linkTypes: ['route','register'] },
+  infra:    { nodes: ['infra','gateway','service','topic','eureka'], linkTypes: ['cache','observe','infra-conn','register'] },
+};
+
+let currentView = 'all';
+let currentGroup = 'all';
+let hiddenTypes = new Set();
+
+/* ════════════════════════════════════════════════════════════════════════════
+   D3 SETUP
+════════════════════════════════════════════════════════════════════════════ */
+const svg = d3.select('#graph');
+const g   = svg.append('g');
+
+// Arrow markers
+const defs = svg.append('defs');
+['produce','consume','route','register','cache','observe','infra-conn'].forEach(type => {
+  defs.append('marker')
+    .attr('id', `arrow-${type}`)
+    .attr('viewBox', '0 -5 10 10')
+    .attr('refX', 26)
+    .attr('refY', 0)
+    .attr('markerWidth', 6)
+    .attr('markerHeight', 6)
+    .attr('orient', 'auto')
+    .append('path')
+    .attr('d', 'M0,-5L10,0L0,5')
+    .attr('fill', LINK_COLORS[type] || '#4a5568')
+    .attr('opacity', .7);
+});
+
+const zoom = d3.zoom().scaleExtent([.1, 4]).on('zoom', e => g.attr('transform', e.transform));
+svg.call(zoom);
+
+let simulation, linkSel, nodeSel, labelSel;
+
+function getVisibleData() {
+  const view = VIEWS[currentView] || VIEWS.all;
+  let nodes = NODES;
+  let links = LINKS;
+
+  if (view.nodes) {
+    nodes = nodes.filter(n => view.nodes.includes(n.type));
+  }
+  if (currentGroup !== 'all') {
+    nodes = nodes.filter(n => n.group && n.group.includes(currentGroup));
+  }
+  if (hiddenTypes.size > 0) {
+    nodes = nodes.filter(n => !hiddenTypes.has(n.type));
+  }
+
+  const nodeIds = new Set(nodes.map(n => n.id));
+  if (view.linkTypes) {
+    links = links.filter(l => view.linkTypes.includes(l.type));
+  }
+  links = links.filter(l => nodeIds.has(l.source.id || l.source) && nodeIds.has(l.target.id || l.target));
+
+  return { nodes: nodes.map(n => ({ ...n })), links: links.map(l => ({ ...l })) };
+}
+
+function render() {
+  const { nodes, links } = getVisibleData();
+  const W = svg.node().clientWidth || 1200;
+  const H = svg.node().clientHeight || 700;
+
+  if (simulation) simulation.stop();
+
+  g.selectAll('*').remove();
+
+  // ── Links ──────────────────────────────────────────────────
+  const linkGroup = g.append('g').attr('class', 'links');
+
+  linkSel = linkGroup.selectAll('line')
+    .data(links)
+    .join('line')
+    .attr('class', 'link')
+    .attr('stroke', d => LINK_COLORS[d.type] || '#4a5568')
+    .attr('stroke-width', d => d.type === 'route' || d.type === 'produce' ? 2 : 1.2)
+    .attr('stroke-dasharray', d => d.type === 'observe' || d.type === 'cache' ? '4,3' : null)
+    .attr('marker-end', d => `url(#arrow-${d.type})`);
+
+  // ── Nodes ──────────────────────────────────────────────────
+  const nodeGroup = g.append('g').attr('class', 'nodes');
+
+  nodeSel = nodeGroup.selectAll('g.node')
+    .data(nodes, d => d.id)
+    .join('g')
+    .attr('class', 'node')
+    .call(d3.drag()
+      .on('start', (e, d) => {
+        if (!e.active) simulation.alphaTarget(.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      })
+      .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end', (e, d) => {
+        if (!e.active) simulation.alphaTarget(0);
+        d.fx = null; d.fy = null;
+      }))
+    .on('click', (e, d) => { e.stopPropagation(); showDetails(d); selectNode(d.id); })
+    .on('mouseover', (e, d) => showTooltip(e, d))
+    .on('mousemove', (e) => moveTooltip(e))
+    .on('mouseout', hideTooltip);
+
+  nodeSel.append('circle')
+    .attr('r', d => NODE_RADII[d.type] || 18)
+    .attr('fill', d => NODE_COLORS[d.type] || '#58a6ff')
+    .attr('fill-opacity', .15)
+    .attr('stroke', d => NODE_COLORS[d.type] || '#58a6ff')
+    .attr('stroke-opacity', .9);
+
+  // Icon inside node
+  nodeSel.append('text')
+    .attr('text-anchor', 'middle')
+    .attr('dy', '0.4em')
+    .attr('font-size', d => NODE_RADII[d.type] * 0.75 + 'px')
+    .attr('fill', d => NODE_COLORS[d.type])
+    .attr('fill-opacity', .9)
+    .text(d => {
+      const icons = { gateway:'⚡', service:'⚙', eureka:'🔭', topic:'📨', infra:'🏗' };
+      return icons[d.type] || '●';
+    });
+
+  // Labels
+  labelSel = nodeGroup.selectAll('text.nlabel')
+    .data(nodes, d => d.id)
+    .join('text')
+    .attr('class', 'nlabel')
+    .attr('text-anchor', 'middle')
+    .attr('dy', d => (NODE_RADII[d.type] || 18) + 14)
+    .attr('font-size', '11px')
+    .attr('fill', '#e6edf3')
+    .text(d => d.label);
+
+  // Port badge
+  nodeSel.filter(d => d.port)
+    .append('text')
+    .attr('text-anchor', 'middle')
+    .attr('dy', d => -(NODE_RADII[d.type] || 18) - 5)
+    .attr('font-size', '9px')
+    .attr('fill', '#8b949e')
+    .text(d => `:${d.port}`);
+
+  // ── Simulation ──────────────────────────────────────────────
+  simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(d => {
+      if (d.type === 'route')   return 160;
+      if (d.type === 'produce') return 130;
+      if (d.type === 'consume') return 130;
+      if (d.type === 'register') return 180;
+      if (d.type === 'cache')   return 150;
+      return 100;
+    }))
+    .force('charge', d3.forceManyBody().strength(d => d.type === 'topic' ? -200 : -400))
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collision', d3.forceCollide().radius(d => (NODE_RADII[d.type] || 18) + 24))
+    .on('tick', ticked);
+
+  function ticked() {
+    linkSel
+      .attr('x1', d => d.source.x)
+      .attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x)
+      .attr('y2', d => d.target.y);
+
+    nodeSel.attr('transform', d => `translate(${d.x},${d.y})`);
+    labelSel.attr('transform', d => `translate(${d.x},${d.y})`);
+  }
+
+  svg.on('click', () => { closeDetails(); clearSelection(); });
+  resetZoom(true);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TOOLTIP
+════════════════════════════════════════════════════════════════════════════ */
+const tooltip = document.getElementById('tooltip');
+const ttTitle = document.getElementById('tt-title');
+const ttBody  = document.getElementById('tt-body');
+
+function showTooltip(e, d) {
+  ttTitle.textContent = d.label;
+  ttBody.textContent  = d.desc || d.type;
+  tooltip.classList.add('show');
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  const wrap = document.querySelector('.canvas-wrap').getBoundingClientRect();
+  const x = e.clientX - wrap.left + 12;
+  const y = e.clientY - wrap.top  + 12;
+  tooltip.style.left = Math.min(x, wrap.width  - 220) + 'px';
+  tooltip.style.top  = Math.min(y, wrap.height - 80)  + 'px';
+}
+function hideTooltip() { tooltip.classList.remove('show'); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DETAILS PANEL
+════════════════════════════════════════════════════════════════════════════ */
+const detailsPanel = document.getElementById('details-panel');
+const detailsInner = document.getElementById('details-inner');
+
+const BADGE_COLORS = {
+  gateway: '#58a6ff', service: '#2ea043', eureka: '#f78166', topic: '#a371f7', infra: '#e3b341',
+};
+
+function showDetails(d) {
+  let html = `
+    <button class="details-close" onclick="closeDetails()">✕</button>
+    <div class="details-badge" style="background:${BADGE_COLORS[d.type]}22;color:${BADGE_COLORS[d.type]}">${d.type}</div>
+    <div class="details-name">${d.label}</div>
+    <div class="details-sub">${d.desc || ''}</div>`;
+
+  if (d.port) html += `
+    <div class="details-section">
+      <h4>Runtime</h4>
+      <div class="details-row"><span class="details-key">Port</span><span class="details-val">:${d.port}</span></div>
+    </div>`;
+
+  if (d.tech && d.tech.length) html += `
+    <div class="details-section">
+      <h4>Tech Stack</h4>
+      ${d.tech.map(t => `<div class="conn-item">${t}</div>`).join('')}
+    </div>`;
+
+  if (d.entities && d.entities.length) html += `
+    <div class="details-section">
+      <h4>Entities</h4>
+      ${d.entities.map(e => `<div class="conn-item">📄 ${e}</div>`).join('')}
+    </div>`;
+
+  if (d.endpoints && d.endpoints.length) html += `
+    <div class="details-section">
+      <h4>API Endpoints</h4>
+      <ul class="endpoint-list">
+        ${d.endpoints.map(ep => `<li class="endpoint-item"><span class="method ${ep.method}">${ep.method}</span><span class="endpoint-path">${ep.path}</span></li>`).join('')}
+      </ul>
+    </div>`;
+
+  if (d.routes && d.routes.length) html += `
+    <div class="details-section">
+      <h4>Gateway Routes</h4>
+      ${d.routes.map(r => `<div class="conn-item" style="font-family:monospace;font-size:10px">${r}</div>`).join('')}
+    </div>`;
+
+  if (d.produces && d.produces.length) html += `
+    <div class="details-section">
+      <h4>Produces</h4>
+      ${d.produces.map(t => `<div class="conn-item"><span class="conn-arrow">→</span> ${t}</div>`).join('')}
+    </div>`;
+
+  if (d.consumes && d.consumes.length) html += `
+    <div class="details-section">
+      <h4>Consumes</h4>
+      ${d.consumes.map(t => `<div class="conn-item"><span class="conn-arrow">←</span> ${t}</div>`).join('')}
+    </div>`;
+
+  if (d.dispatchers && d.dispatchers.length) html += `
+    <div class="details-section">
+      <h4>Dispatchers</h4>
+      ${d.dispatchers.map(t => `<div class="conn-item">📡 ${t}</div>`).join('')}
+    </div>`;
+
+  if (d.partitions) html += `
+    <div class="details-section">
+      <h4>Topic Info</h4>
+      <div class="details-row"><span class="details-key">Partitions</span><span class="details-val">${d.partitions}</span></div>
+      <div class="details-row"><span class="details-key">Replication</span><span class="details-val">1 (dev)</span></div>
+    </div>`;
+
+  detailsInner.innerHTML = html;
+  detailsPanel.classList.add('open');
+}
+
+function closeDetails() {
+  detailsPanel.classList.remove('open');
+  clearSelection();
+}
+
+function selectNode(id) {
+  d3.selectAll('.node').classed('selected', d => d.id === id);
+}
+function clearSelection() {
+  d3.selectAll('.node').classed('selected', false);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   VIEW SWITCHER
+════════════════════════════════════════════════════════════════════════════ */
+function setView(view, btn) {
+  currentView = view;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   FOCUS GROUP FILTER
+════════════════════════════════════════════════════════════════════════════ */
+function focusGroup(group, btn) {
+  currentGroup = group;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TYPE TOGGLE
+════════════════════════════════════════════════════════════════════════════ */
+function toggleType(type) {
+  if (hiddenTypes.has(type)) hiddenTypes.delete(type);
+  else hiddenTypes.add(type);
+  render();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ZOOM CONTROLS
+════════════════════════════════════════════════════════════════════════════ */
+function zoomIn()  { svg.transition().call(zoom.scaleBy, 1.3); }
+function zoomOut() { svg.transition().call(zoom.scaleBy, 0.77); }
+function resetZoom(instant) {
+  const t = instant ? svg : svg.transition().duration(500);
+  t.call(zoom.transform, d3.zoomIdentity);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════════════════════════ */
+window.addEventListener('load', () => {
+  render();
+  window.addEventListener('resize', () => render());
+});
+</script>
+</body>
+</html>

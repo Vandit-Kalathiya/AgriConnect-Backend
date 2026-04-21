@@ -7,6 +7,7 @@ import com.agriconnect.api.gateway.DTO.Jwt.JwtResponse;
 import com.agriconnect.api.gateway.Entity.User.User;
 import com.agriconnect.api.gateway.Service.Auth.AuthService;
 import com.agriconnect.api.gateway.Service.Auth.RegistrationVerificationService;
+import com.agriconnect.api.gateway.Service.Cache.CacheService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -17,7 +18,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/auth")
@@ -28,11 +31,13 @@ public class AuthController {
 
     private final AuthService authService;
     private final RegistrationVerificationService registrationVerificationService;
+    private final CacheService cacheService;
 
     @Autowired
-    public AuthController(AuthService authService, RegistrationVerificationService registrationVerificationService) {
+    public AuthController(AuthService authService, RegistrationVerificationService registrationVerificationService, CacheService cacheService) {
         this.authService = authService;
         this.registrationVerificationService = registrationVerificationService;
+        this.cacheService = cacheService;
     }
 
     @PostMapping("/register")
@@ -56,7 +61,7 @@ public class AuthController {
     public ResponseEntity<JwtResponse> login(
             @Valid @RequestBody JwtRequest jwtRequest,
             HttpServletResponse response) {
-        logger.info("Login request for phone: {}", jwtRequest.getPhoneNumber());
+        logger.info("Login request for username: {}", jwtRequest.getUsername());
         JwtResponse jwtResponse = authService.login(jwtRequest, response);
         return ResponseEntity.ok(jwtResponse);
     }
@@ -66,5 +71,23 @@ public class AuthController {
         logger.debug("Fetching current authenticated user");
         User currentUser = authService.getCurrentUser();
         return ResponseEntity.ok(currentUser);
+    }
+
+    @GetMapping("/test-cache")
+    public ResponseEntity<Map<String, String>> testCache() {
+        // Save to cache
+        cacheService.save("test:user:123", "John Doe", Duration.ofMinutes(5));
+
+        // Get from cache
+        Optional<String> value = cacheService.get("test:user:123", String.class);
+
+        // Check existence
+        boolean exists = cacheService.exists("test:user:123");
+
+        return ResponseEntity.ok(Map.of(
+                "saved", "test:user:123",
+                "retrieved", value.orElse("NOT FOUND"),
+                "exists", String.valueOf(exists)
+        ));
     }
 }

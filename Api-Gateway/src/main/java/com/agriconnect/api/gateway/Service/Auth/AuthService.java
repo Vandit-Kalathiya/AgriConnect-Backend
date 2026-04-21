@@ -68,13 +68,13 @@ public class AuthService {
 
     @Autowired
     public AuthService(AuthenticationManager manager,
-                       JwtAuthenticationHelper jwtHelper,
-                       UserDetailsService userDetailsService,
-                       TokenService tokenService,
-                       SessionRepository sessionRepository,
-                       UserRepository userRepository,
-                       PasswordEncoder passwordEncoder,
-                       NotificationEventPublisher notificationEventPublisher) {
+            JwtAuthenticationHelper jwtHelper,
+            UserDetailsService userDetailsService,
+            TokenService tokenService,
+            SessionRepository sessionRepository,
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            NotificationEventPublisher notificationEventPublisher) {
         this.manager = manager;
         this.jwtHelper = jwtHelper;
         this.userDetailsService = userDetailsService;
@@ -120,13 +120,13 @@ public class AuthService {
     }
 
     public JwtResponse login(JwtRequest jwtRequest, HttpServletResponse response) {
-        logger.info("Login attempt for phone number: {}", jwtRequest.getPhoneNumber());
+        logger.info("Login attempt for username: {}", jwtRequest.getUsername());
 
         try {
-            doAuthenticate(jwtRequest.getPhoneNumber(), jwtRequest.getPassword());
+            doAuthenticate(jwtRequest.getUsername(), jwtRequest.getPassword());
 
-            UserDetails userDetails = userDetailsService.loadUserByUsername(jwtRequest.getPhoneNumber());
-            String token = jwtHelper.generateToken(jwtRequest.getPhoneNumber());
+            UserDetails userDetails = userDetailsService.loadUserByUsername(jwtRequest.getUsername());
+            String token = jwtHelper.generateToken(userDetails.getUsername());
 
             JwtToken jwtToken = new JwtToken();
             jwtToken.setToken(token);
@@ -145,28 +145,26 @@ public class AuthService {
             jwtCookie.setMaxAge((int) (jwtExpiration / 1000));
             response.addCookie(jwtCookie);
 
-            logger.info("User logged in successfully: {}", jwtRequest.getPhoneNumber());
+            logger.info("User logged in successfully: {}", jwtRequest.getUsername());
 
             // Publish login notification (in-app only to avoid spam)
             try {
-                User loggedInUser = userRepository.getUserByPhoneNumber(jwtRequest.getPhoneNumber()).orElse(null);
+                User loggedInUser = getUserByUsernameOrEmail(jwtRequest.getUsername());
                 if (loggedInUser != null) {
                     notificationEventPublisher.publish(authTopic,
-                        notificationEventPublisher.buildEvent(
-                            "AUTH_NEW_DEVICE_LOGIN",
-                            loggedInUser.getId(),
-                            "auth.new.device.login",
-                            List.of("IN_APP"),
-                            Map.of(
-                                "loginAt", Instant.now().toString(),
-                                "userName", loggedInUser.getUsername() != null ? loggedInUser.getUsername() : "Farmer"
-                            ),
-                            Priority.NORMAL,
-                            "login-" + loggedInUser.getId(),
-                            loggedInUser.getEmail(),
-                            loggedInUser.getPhoneNumber()
-                        )
-                    );
+                            notificationEventPublisher.buildEvent(
+                                    "AUTH_NEW_DEVICE_LOGIN",
+                                    loggedInUser.getId(),
+                                    "auth.new.device.login",
+                                    List.of("IN_APP"),
+                                    Map.of(
+                                            "loginAt", Instant.now().toString(),
+                                            "userName",
+                                            loggedInUser.getUsername() != null ? loggedInUser.getUsername() : "Farmer"),
+                                    Priority.NORMAL,
+                                    "login-" + loggedInUser.getId(),
+                                    loggedInUser.getEmail(),
+                                    loggedInUser.getPhoneNumber()));
                 }
             } catch (Exception ex) {
                 logger.warn("[NOTIFY] Failed to publish AUTH_NEW_DEVICE_LOGIN: {}", ex.getMessage());
@@ -178,20 +176,27 @@ public class AuthService {
                     .build();
 
         } catch (BadCredentialsException e) {
-            logger.error("Login failed for phone number: {} - Invalid credentials", jwtRequest.getPhoneNumber());
-            throw new UnauthorizedException("Invalid phone number or password");
+            logger.error("Login failed for username: {} - Invalid credentials", jwtRequest.getUsername());
+            throw new UnauthorizedException("Invalid username or password");
         }
     }
 
-    private void doAuthenticate(String phoneNumber, String password) {
+    private void doAuthenticate(String username, String password) {
         try {
-            UsernamePasswordAuthenticationToken authToken =
-                    new UsernamePasswordAuthenticationToken(phoneNumber, password);
+            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(username, password);
             Authentication authentication = manager.authenticate(authToken);
             SecurityContextHolder.getContext().setAuthentication(authentication);
         } catch (BadCredentialsException e) {
-            logger.error("Authentication failed for phone number: {}", phoneNumber);
-            throw new BadCredentialsException("Invalid phone number or password");
+            logger.error("Authentication failed for username: {}", username);
+            throw new BadCredentialsException("Invalid username or password");
+        }
+    }
+
+    private User getUserByUsernameOrEmail(String username) {
+        if (username.matches("^[0-9]{10}$")) {
+            return userRepository.getUserByPhoneNumber(username).orElse(null);
+        } else {
+            return userRepository.findByEmail(username).orElse(null);
         }
     }
 

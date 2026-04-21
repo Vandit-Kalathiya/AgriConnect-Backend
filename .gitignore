@@ -231,3 +231,4 @@ replay_pid*
 .apt_generated/
 .apt_generated_test/
 *.hprof
+.code-review-graph/

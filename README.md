@@ -3,6 +3,7 @@
 AgriConnect Backend is a microservices platform powering agricultural workflows across farmer onboarding, market access, contract farming, agreement generation, AI-assisted advisory, and real-time event-driven notifications.
 
 This README is intentionally product-focused and safe for sharing:
+
 - no hardcoded infrastructure ports
 - no raw local URLs
 - no secret or sensitive configuration values
@@ -12,6 +13,7 @@ This README is intentionally product-focused and safe for sharing:
 ## Product Overview
 
 AgriConnect Backend provides:
+
 - unified gateway-based API access for frontend clients
 - secure authentication and logout lifecycle
 - marketplace and listing operations
@@ -25,15 +27,15 @@ AgriConnect Backend provides:
 
 ## Service Boundaries
 
-| Service | Responsibility |
-|---------|---------------|
-| `Api-Gateway` | Single entry point, routing, resiliency, CORS, JWT auth, unified API docs |
-| `Eureka-Main-Server` | Service registry and discovery |
-| `Market-Access-App` | Listings, marketplace operations, AI orchestration, AI persistence |
-| `Contract-Farming-App` | Contract, order, payment-related workflows |
-| `Generate-Agreement-App` | Agreement and document-generation capabilities |
-| `Notification-Service` | Kafka event consumer, multi-channel dispatch, in-app persistence, WebSocket push |
-| `Ws-Gateway` | Dedicated reactive WebSocket gateway — proxies native `ws://` connections to Notification-Service |
+| Service                  | Responsibility                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `Api-Gateway`            | Single entry point, routing, resiliency, CORS, JWT auth, unified API docs                         |
+| `Eureka-Main-Server`     | Service registry and discovery                                                                    |
+| `Market-Access-App`      | Listings, marketplace operations, AI orchestration, AI persistence                                |
+| `Contract-Farming-App`   | Contract, order, payment-related workflows                                                        |
+| `Generate-Agreement-App` | Agreement and document-generation capabilities                                                    |
+| `Notification-Service`   | Kafka event consumer, multi-channel dispatch, in-app persistence, WebSocket push                  |
+| `Ws-Gateway`             | Dedicated reactive WebSocket gateway — proxies native `ws://` connections to Notification-Service |
 
 All client integrations should call APIs through the gateway route space.  
 WebSocket connections go through the dedicated `Ws-Gateway`.
@@ -74,13 +76,13 @@ Producer microservices  →  Kafka topics  →  Notification-Service  →  Email
 
 **Kafka topics:**
 
-| Topic | Producer |
-|-------|----------|
-| `agriconnect.notifications.auth` | Api-Gateway |
-| `agriconnect.notifications.market` | Market-Access-App |
-| `agriconnect.notifications.contract` | Contract-Farming-App |
-| `agriconnect.notifications.agreement` | Generate-Agreement-App |
-| `agriconnect.notifications.dlq` | Notification-Service (failed events) |
+| Topic                                 | Producer                             |
+| ------------------------------------- | ------------------------------------ |
+| `agriconnect.notifications.auth`      | Api-Gateway                          |
+| `agriconnect.notifications.market`    | Market-Access-App                    |
+| `agriconnect.notifications.contract`  | Contract-Farming-App                 |
+| `agriconnect.notifications.agreement` | Generate-Agreement-App               |
+| `agriconnect.notifications.dlq`       | Notification-Service (failed events) |
 
 **28 notification scenarios** are implemented across all services. See `NOTIFICATION_SCENARIOS.md` for the complete reference.
 
@@ -91,6 +93,7 @@ UI integration guide: `NOTIFICATION_UI_GUIDE.md`
 ## AI Capabilities (Market Access)
 
 AI orchestration in `Market-Access-App` includes:
+
 - domain-scoped agricultural assistant behavior
 - safety decisions and fallback responses
 - crop advisory and market/listing support flows
@@ -119,6 +122,7 @@ This guarantees safe grouping and continuation behavior for UI.
 ## AI/History API Surface (High-Level)
 
 Core capabilities exposed by AI endpoints:
+
 - send/continue chat
 - list conversations
 - fetch messages of a conversation
@@ -135,6 +139,7 @@ Refer to API docs in gateway Swagger and `AI_HISTORY_UI_INTEGRATION_GUIDE.md` fo
 ## Data Lifecycle and Cleanup
 
 AI persistence is managed with:
+
 - versioned Flyway migrations
 - retention-based cleanup scheduling
 - batched cleanup to reduce lock pressure
@@ -158,6 +163,7 @@ Retention behavior is configurable through application properties and environmen
 ## Observability and Reliability
 
 Platform reliability patterns include:
+
 - circuit breaker protections at gateway boundaries
 - centralized request routing and CORS policy handling
 - health/metrics actuator exposure for service monitoring
@@ -172,6 +178,7 @@ Platform reliability patterns include:
 Production-safe schema changes are handled using Flyway migration scripts in each service that owns data changes.
 
 Use migration-first deployments:
+
 - backup database
 - deploy with Flyway enabled
 - validate migration history and health checks
@@ -184,6 +191,7 @@ Operational runbook: `PRODUCTION_DB_MIGRATION_GUIDE.md`
 ## Frontend Integration Guidance
 
 For frontend teams:
+
 - always use gateway-facing API paths (`http://<gateway>/notifications/api/...`)
 - WebSocket connections go through `Ws-Gateway` (separate port) — **not** through API Gateway
 - keep chat and crop-advisory histories in separate UI flows
@@ -192,6 +200,7 @@ For frontend teams:
 - subscribe to `/topic/notifications/{userId}` for real-time notifications
 
 Reference guides:
+
 - `NOTIFICATION_UI_GUIDE.md` — real-time notification integration (WebSocket + REST)
 - `NOTIFICATION_SCENARIOS.md` — all 28 notification triggers reference
 - `AI_HISTORY_UI_INTEGRATION_GUIDE.md` — AI chat/history integration
@@ -214,12 +223,18 @@ Backend/
 ├── .env                          # Root environment variables for Docker Compose
 ├── README.md
 ├── QUICK_START.md
-├── NOTIFICATION_UI_GUIDE.md
-├── NOTIFICATION_SCENARIOS.md
-├── AI_HISTORY_UI_INTEGRATION_GUIDE.md
-├── AI_BACKEND_HANDOVER.md
-├── PRODUCTION_CHECKLIST.md
-└── PRODUCTION_DB_MIGRATION_GUIDE.md
+└── docs/                         # Documentation
+    ├── NOTIFICATION_UI_GUIDE.md
+    ├── NOTIFICATION_SCENARIOS.md
+    ├── AI_HISTORY_UI_INTEGRATION_GUIDE.md
+    ├── AI_BACKEND_HANDOVER.md
+    ├── PRODUCTION_CHECKLIST.md
+    ├── PRODUCTION_DB_MIGRATION_GUIDE.md
+    ├── DEPLOYMENT_FLAG_GUIDE.md
+    ├── DEPLOYMENT_QUICK_REFERENCE.md
+    ├── CACHE_CONFIGURATION_GUIDE.md
+    ├── REDIS_CACHE_GUIDE.md
+    └── REDIS_IMPLEMENTATION_SUMMARY.md
 ```
 
 ---
@@ -227,19 +242,28 @@ Backend/
 ## Quick Start
 
 For setup and local run instructions, use:
+
 - `QUICK_START.md`
 
 For notification system UI integration, use:
-- `NOTIFICATION_UI_GUIDE.md`
+
+- `docs/NOTIFICATION_UI_GUIDE.md`
 
 For all notification trigger scenarios, use:
-- `NOTIFICATION_SCENARIOS.md`
+
+- `docs/NOTIFICATION_SCENARIOS.md`
 
 For AI history UI integration details, use:
-- `AI_HISTORY_UI_INTEGRATION_GUIDE.md`
+
+- `docs/AI_HISTORY_UI_INTEGRATION_GUIDE.md`
 
 For production DB migration procedures, use:
-- `PRODUCTION_DB_MIGRATION_GUIDE.md`
+
+- `docs/PRODUCTION_DB_MIGRATION_GUIDE.md`
+
+For CI/CD deployment control (enable/disable EC2 deployment), use:
+
+- `docs/DEPLOYMENT_FLAG_GUIDE.md`
 
 ---
 

@@ -47,6 +47,31 @@ spring:
     properties:
       schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
       transactional.id: ${spring.application.name}-tx
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 5
+          min-idle: 2
+          max-wait: 500ms
+
+cache:
+  local:
+    enabled: ${CACHE_LOCAL_ENABLED:false}
+  prod:
+    enabled: ${CACHE_PROD_ENABLED:false}
+
+redis:
+  enabled: ${CACHE_LOCAL_ENABLED:false}
+
+feature:
+  kafka:
+    enabled: ${FEATURE_KAFKA_ENABLED:false}
 
 server:
   port: ${PORT:2527}
@@ -86,6 +111,35 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+
+---
+# ── Production profile — AWS ElastiCache Valkey with TLS ──────────────────────
+spring:
+  config:
+    activate:
+      on-profile: prod
+  data:
+    redis:
+      url: ${VALKEY_URL}
+      password: ${VALKEY_PASSWORD:}
+      ssl:
+        enabled: true
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: 500ms
+
+cache:
+  local:
+    enabled: false
+  prod:
+    enabled: ${CACHE_PROD_ENABLED:true}
+
+redis:
+  enabled: ${CACHE_PROD_ENABLED:true}
 
 ---
 # ── Production-Secure profile — SASL_SSL ─────────────────────────────────────
@@ -134,4 +188,3 @@ ai:
     cleanup-batch-size: ${AI_PERSISTENCE_CLEANUP_BATCH_SIZE:1000}
     cleanup-max-batches: ${AI_PERSISTENCE_CLEANUP_MAX_BATCHES:5}
     cleanup-cron: ${AI_PERSISTENCE_CLEANUP_CRON:0 0 3 * * *}
-

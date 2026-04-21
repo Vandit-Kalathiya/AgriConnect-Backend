@@ -3,6 +3,7 @@ package com.agriconnect.notification.dlq;
 import com.agriconnect.notification.avro.NotificationEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -30,6 +31,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "feature.kafka.enabled", havingValue = "true")
 public class DlqReprocessingJob {
 
     @Value("${notification.topics.dlq}")
@@ -41,15 +43,10 @@ public class DlqReprocessingJob {
 
     /**
      * Collects DLQ records into a buffer for scheduled reprocessing.
-     * containerFactory points to the standard consumer factory — DLQ topic uses same Avro schema.
+     * containerFactory points to the standard consumer factory — DLQ topic uses
+     * same Avro schema.
      */
-    @KafkaListener(
-        topics          = "${notification.topics.dlq}",
-        groupId         = "agriconnect-notification-dlq-reprocessor",
-        containerFactory = "kafkaListenerContainerFactory",
-        id              = "dlqReprocessingListener",
-        autoStartup     = "false"
-    )
+    @KafkaListener(topics = "${notification.topics.dlq}", groupId = "agriconnect-notification-dlq-reprocessor", containerFactory = "kafkaListenerContainerFactory", id = "dlqReprocessingListener", autoStartup = "false")
     public void onDlqRecord(ConsumerRecord<String, NotificationEvent> record, Acknowledgment ack) {
         buffer.add(record);
         ack.acknowledge();
@@ -62,7 +59,8 @@ public class DlqReprocessingJob {
      */
     @Scheduled(cron = "0 0 3 * * *")
     public void reprocess() {
-        if (buffer.isEmpty()) return;
+        if (buffer.isEmpty())
+            return;
 
         List<ConsumerRecord<String, NotificationEvent>> batch = new ArrayList<>(buffer);
         buffer.clear();
@@ -80,10 +78,12 @@ public class DlqReprocessingJob {
                 dlqKafkaTemplate.send(originalTopic, record.key(), record.value())
                         .whenComplete((r, ex) -> {
                             if (ex != null) {
-                                log.error("[DLQ-JOB] Re-publish failed for eventId={}", record.value().getEventId(), ex);
+                                log.error("[DLQ-JOB] Re-publish failed for eventId={}", record.value().getEventId(),
+                                        ex);
                                 buffer.add(record);
                             } else {
-                                log.info("[DLQ-JOB] Re-published eventId={} to {}", record.value().getEventId(), originalTopic);
+                                log.info("[DLQ-JOB] Re-published eventId={} to {}", record.value().getEventId(),
+                                        originalTopic);
                             }
                         });
             } catch (Exception ex) {

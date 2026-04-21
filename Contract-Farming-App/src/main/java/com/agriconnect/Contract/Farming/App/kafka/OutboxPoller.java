@@ -4,6 +4,7 @@ import com.agriconnect.notification.avro.NotificationEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,7 @@ import java.util.List;
 @Component
 @Slf4j
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "feature.kafka.enabled", havingValue = "true")
 public class OutboxPoller {
 
     private static final int MAX_RETRIES = 5;
@@ -26,17 +28,16 @@ public class OutboxPoller {
     @Scheduled(fixedDelay = 5000)
     @Transactional
     public void poll() {
-        List<NotificationOutboxEntry> pending =
-                outboxRepository.findTop50ByStatusOrderByCreatedAtAsc(NotificationOutboxEntry.OutboxStatus.PENDING);
+        List<NotificationOutboxEntry> pending = outboxRepository
+                .findTop50ByStatusOrderByCreatedAtAsc(NotificationOutboxEntry.OutboxStatus.PENDING);
 
-        if (pending.isEmpty()) return;
+        if (pending.isEmpty())
+            return;
 
         for (NotificationOutboxEntry entry : pending) {
             try {
                 NotificationEvent event = objectMapper.readValue(entry.getPayload(), NotificationEvent.class);
-                kafkaTemplate.executeInTransaction(ops ->
-                        ops.send(entry.getTopic(), entry.getPartitionKey(), event)
-                );
+                kafkaTemplate.executeInTransaction(ops -> ops.send(entry.getTopic(), entry.getPartitionKey(), event));
                 entry.setStatus(NotificationOutboxEntry.OutboxStatus.SENT);
                 entry.setLastAttemptAt(Instant.now());
                 log.info("[OUTBOX] Published eventId={}", entry.getEventId());
@@ -47,7 +48,8 @@ public class OutboxPoller {
                     entry.setStatus(NotificationOutboxEntry.OutboxStatus.FAILED);
                     log.error("[OUTBOX] Giving up on eventId={}", entry.getEventId(), ex);
                 } else {
-                    log.warn("[OUTBOX] Retry {}/{} for eventId={}", entry.getRetryCount(), MAX_RETRIES, entry.getEventId());
+                    log.warn("[OUTBOX] Retry {}/{} for eventId={}", entry.getRetryCount(), MAX_RETRIES,
+                            entry.getEventId());
                 }
             }
             outboxRepository.save(entry);

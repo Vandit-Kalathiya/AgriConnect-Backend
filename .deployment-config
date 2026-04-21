@@ -1,0 +1,14 @@
+# ============================================================
+# Deployment Configuration
+# ============================================================
+# This file controls whether the CI/CD pipeline deploys to EC2
+# or only runs CI (build + docker push).
+#
+# Set ENABLE_DEPLOYMENT to control deployment behavior:
+#   true  = Full CI/CD (build → docker push → EC2 deploy)
+#   false = CI only (build → docker push, skip EC2 deploy)
+#
+# Default: false (safe for development)
+# ============================================================
+
+ENABLE_DEPLOYMENT=false

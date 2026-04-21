@@ -34,6 +34,14 @@
 #  EC2_PORT                SSH port  (optional — defaults to 22)
 #
 # ──────────────────────────────────────────────────────────────────────
+#  Deployment Control
+# ──────────────────────────────────────────────────────────────────────
+#  Edit .deployment-config file in the repo root:
+#    ENABLE_DEPLOYMENT=true   → Full CI/CD (build + push + deploy)
+#    ENABLE_DEPLOYMENT=false  → CI only (build + push, skip deploy)
+#  Commit and push the file to control deployment behavior.
+#
+# ──────────────────────────────────────────────────────────────────────
 #  EC2 one-time prerequisites  (manual setup before first deploy)
 # ──────────────────────────────────────────────────────────────────────
 #  1. Docker + Docker Compose plugin installed
@@ -57,9 +65,9 @@ name: CI/CD — Build · Docker Push · Deploy to EC2
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 env:
@@ -71,7 +79,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-
   # ──────────────────────────────────────────────────────────────────
   # JOB 1 · Build & Package
   # All 6 microservices are compiled and packaged in parallel.
@@ -83,15 +90,15 @@ jobs:
     timeout-minutes: 15
 
     strategy:
-      fail-fast: false   # if one service fails to compile, others still run
+      fail-fast: false # if one service fails to compile, others still run
       matrix:
         include:
-          - { service: Eureka-Main-Server,     java: "21" }
-          - { service: Api-Gateway,            java: "23" }
-          - { service: Contract-Farming-App,   java: "21" }
-          - { service: Market-Access-App,      java: "24" }
+          - { service: Eureka-Main-Server, java: "21" }
+          - { service: Api-Gateway, java: "23" }
+          - { service: Contract-Farming-App, java: "21" }
+          - { service: Market-Access-App, java: "24" }
           - { service: Generate-Agreement-App, java: "21" }
-          - { service: Notification-Service,   java: "21" }
+          - { service: Notification-Service, java: "21" }
 
     steps:
       - name: Checkout repository
@@ -107,7 +114,6 @@ jobs:
       - name: Compile & package — ${{ matrix.service }}
         working-directory: ${{ matrix.service }}
         run: mvn package -DskipTests --batch-mode --no-transfer-progress
-
 
   # ──────────────────────────────────────────────────────────────────
   # JOB 2 · Docker Build & Push to Docker Hub
@@ -129,12 +135,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { service: Eureka-Main-Server,     image: agriconnect-eureka-server      }
-          - { service: Api-Gateway,            image: agriconnect-api-gateway        }
-          - { service: Contract-Farming-App,   image: agriconnect-contract-farming   }
-          - { service: Market-Access-App,      image: agriconnect-market-access      }
-          - { service: Generate-Agreement-App, image: agriconnect-generate-agreement }
-          - { service: Notification-Service,   image: agriconnect-notification-service }
+          - { service: Eureka-Main-Server, image: agriconnect-eureka-server }
+          - { service: Api-Gateway, image: agriconnect-api-gateway }
+          - {
+              service: Contract-Farming-App,
+              image: agriconnect-contract-farming,
+            }
+          - { service: Market-Access-App, image: agriconnect-market-access }
+          - {
+              service: Generate-Agreement-App,
+              image: agriconnect-generate-agreement,
+            }
+          - {
+              service: Notification-Service,
+              image: agriconnect-notification-service,
+            }
 
     steps:
       - name: Checkout repository
@@ -175,7 +190,6 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
-
   # ──────────────────────────────────────────────────────────────────
   # JOB 3 · Deploy to EC2
   # Waits for all 6 service images to be pushed to Docker Hub, then
@@ -208,20 +222,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Read deployment config
+        id: deployment-config
+        run: |
+          if [ -f .deployment-config ]; then
+            ENABLE_DEPLOYMENT=$(grep '^ENABLE_DEPLOYMENT=' .deployment-config | cut -d'=' -f2 | tr -d '[:space:]')
+            echo "enabled=${ENABLE_DEPLOYMENT}" >> $GITHUB_OUTPUT
+            echo "Deployment flag from .deployment-config: ${ENABLE_DEPLOYMENT}"
+          else
+            echo "enabled=false" >> $GITHUB_OUTPUT
+            echo "No .deployment-config found, defaulting to false"
+          fi
+
+      - name: Skip deployment if disabled
+        if: steps.deployment-config.outputs.enabled != 'true'
+        run: |
+          echo "⏭️ Deployment is DISABLED in .deployment-config"
+          echo "To enable deployment, set ENABLE_DEPLOYMENT=true in .deployment-config and push."
+          exit 0
+
       - name: Compute short SHA
         id: sha
+        if: steps.deployment-config.outputs.enabled == 'true'
         run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Deploy via SSH
+        if: steps.deployment-config.outputs.enabled == 'true'
         uses: appleboy/ssh-action@v1.0.3
         env:
           SHORT_SHA: ${{ steps.sha.outputs.short }}
         with:
-          host:        ${{ secrets.EC2_HOST }}
-          username:    ${{ secrets.EC2_USER }}
-          key:         ${{ secrets.EC2_SSH_KEY }}
-          port:        ${{ secrets.EC2_PORT || 22 }}
-          envs:        SHORT_SHA
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          envs: SHORT_SHA
           script_stop: true
           script: |
             set -euo pipefail
@@ -403,7 +438,6 @@ jobs:
             echo ""
             docker compose ps
 
-
   # ──────────────────────────────────────────────────────────────────
   # JOB 4 · Pipeline Summary
   # Single consolidated summary written once at the very end.
@@ -411,18 +445,29 @@ jobs:
   pipeline-summary:
     name: "Pipeline Summary"
     runs-on: ubuntu-latest
-    needs: [ build, docker-push, deploy ]
+    needs: [build, docker-push, deploy]
     if: always()
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Read deployment config
+        id: deployment-config
+        run: |
+          if [ -f .deployment-config ]; then
+            ENABLE_DEPLOYMENT=$(grep '^ENABLE_DEPLOYMENT=' .deployment-config | cut -d'=' -f2 | tr -d '[:space:]')
+            echo "enabled=${ENABLE_DEPLOYMENT}" >> $GITHUB_OUTPUT
+          else
+            echo "enabled=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Write consolidated summary
         run: |
           BUILD_RESULT="${{ needs.build.result }}"
           DOCKER_RESULT="${{ needs.docker-push.result }}"
           DEPLOY_RESULT="${{ needs.deploy.result }}"
+          DEPLOYMENT_ENABLED="${{ steps.deployment-config.outputs.enabled }}"
           SHORT_SHA=$(git rev-parse --short HEAD)
           DOCKER_USER="${{ secrets.DOCKER_USERNAME }}"
 
@@ -436,11 +481,25 @@ jobs:
           # ── Pipeline status ────────────────────────────────────────
           echo "## AgriConnect CI/CD — Run #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Show deployment flag status from .deployment-config
+          if [[ "$DEPLOYMENT_ENABLED" == "true" ]]; then
+            echo "**🚀 Deployment Mode:** ENABLED (Full CI/CD) — via .deployment-config" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**🔒 Deployment Mode:** DISABLED (CI only — images pushed to Docker Hub) — via .deployment-config" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
           echo "| Stage | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Build & Package (6 services)  | $(icon $BUILD_RESULT) |" >> $GITHUB_STEP_SUMMARY
           echo "| Docker Build & Push (6 images) | $(icon $DOCKER_RESULT) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Deploy to EC2 + Nginx reload   | $(icon $DEPLOY_RESULT) |" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$DEPLOYMENT_ENABLED" == "true" ]]; then
+            echo "| Deploy to EC2 + Nginx reload   | $(icon $DEPLOY_RESULT) |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Deploy to EC2 + Nginx reload   | ⏭️ Skipped (ENABLE_DEPLOYMENT=false) |" >> $GITHUB_STEP_SUMMARY
+          fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Actor:** @${{ github.actor }} &nbsp;|&nbsp; **Branch:** \`${{ github.ref_name }}\` &nbsp;|&nbsp; **Commit:** \`${SHORT_SHA}\`" >> $GITHUB_STEP_SUMMARY
 
