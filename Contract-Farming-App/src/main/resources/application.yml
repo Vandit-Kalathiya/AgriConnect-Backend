@@ -62,9 +62,12 @@ spring:
       delivery.timeout.ms: 30000
   data:
     redis:
-      host: ${REDIS_HOST:127.0.0.1}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      host: ${VALKEY_HOST}
+      port: ${VALKEY_PORT:6379}
+      username: ${VALKEY_USERNAME:default}
+      password: ${VALKEY_PASSWORD}
+      ssl:
+        enabled: ${VALKEY_SSL_ENABLED:true}
       timeout: 2000ms
       lettuce:
         pool:
