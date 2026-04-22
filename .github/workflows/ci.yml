@@ -116,12 +116,12 @@ jobs:
       fail-fast: false # if one service fails to compile, others still run
       matrix:
         include:
-          - { service: Eureka-Main-Server, java: "21" }
-          - { service: Api-Gateway, java: "23" }
-          - { service: Contract-Farming-App, java: "21" }
+          - { service: Eureka-Main-Server, java: "24" }
+          - { service: Api-Gateway, java: "24" }
+          - { service: Contract-Farming-App, java: "24" }
           - { service: Market-Access-App, java: "24" }
-          - { service: Generate-Agreement-App, java: "21" }
-          - { service: Notification-Service, java: "21" }
+          - { service: Generate-Agreement-App, java: "24" }
+          - { service: Notification-Service, java: "24" }
 
     steps:
       - name: Checkout repository
