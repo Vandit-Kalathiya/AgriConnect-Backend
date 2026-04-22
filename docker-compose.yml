@@ -42,13 +42,6 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
-      CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
-      CACHE_PROD_ENABLED: ${CACHE_PROD_ENABLED:-true}
-      REDIS_HOST: ${REDIS_HOST:-localhost}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      VALKEY_URL: ${VALKEY_URL:-}
-      VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -92,13 +85,6 @@ services:
       GATEWAY_URL: ${GATEWAY_URL:-http://localhost:8080}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
-      CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
-      CACHE_PROD_ENABLED: ${CACHE_PROD_ENABLED:-true}
-      REDIS_HOST: ${REDIS_HOST:-localhost}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      VALKEY_URL: ${VALKEY_URL:-}
-      VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -131,13 +117,6 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
-      CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
-      CACHE_PROD_ENABLED: ${CACHE_PROD_ENABLED:-true}
-      REDIS_HOST: ${REDIS_HOST:-localhost}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      VALKEY_URL: ${VALKEY_URL:-}
-      VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -170,13 +149,6 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
-      CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
-      CACHE_PROD_ENABLED: ${CACHE_PROD_ENABLED:-true}
-      REDIS_HOST: ${REDIS_HOST:-localhost}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      VALKEY_URL: ${VALKEY_URL:-}
-      VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -318,13 +290,6 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       SPRING_PROFILES_ACTIVE: prod
-      CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
-      CACHE_PROD_ENABLED: ${CACHE_PROD_ENABLED:-true}
-      REDIS_HOST: ${REDIS_HOST:-localhost}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      VALKEY_URL: ${VALKEY_URL:-}
-      VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
     depends_on:
       eureka-server:
         condition: service_healthy
