@@ -2,6 +2,18 @@
 #  AgriConnect — CI/CD Pipeline
 #  Trigger : push → main  |  pull_request → main  |  manual
 #
+#  Branch-Specific Behavior
+#  ─────────────────────────
+#  • Feature branches (push to any branch except main)
+#    → Pipeline does NOT run at all
+#
+#  • Pull Request to main (from any feature branch)
+#    → Build job ONLY (verifies code compiles & packages)
+#    → Docker-push and deploy are SKIPPED
+#
+#  • Push/Merge to main (direct push or merged PR)
+#    → FULL pipeline (build → docker-push → deploy)
+#
 #  Jobs
 #  ────
 #  1. build              Compile and package all 6 microservices in
@@ -63,11 +75,22 @@
 
 name: CI/CD — Build · Docker Push · Deploy to EC2
 
+# ──────────────────────────────────────────────────────────────────────
+# Trigger Configuration
+# ──────────────────────────────────────────────────────────────────────
+# This workflow ONLY triggers on:
+#   1. Push to main branch (runs full pipeline: build + docker-push + deploy)
+#   2. Pull request targeting main (runs build job only for verification)
+#   3. Manual workflow dispatch
+#
+# Pushing to feature branches (e.g., feature/xyz, dev, staging) will NOT
+# trigger this pipeline at all.
+# ──────────────────────────────────────────────────────────────────────
 on:
   push:
-    branches: [main]
+    branches: [main] # Only main branch pushes trigger the workflow
   pull_request:
-    branches: [main]
+    branches: [main] # Only PRs targeting main trigger the workflow
   workflow_dispatch:
 
 env:
@@ -118,6 +141,13 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   # JOB 2 · Docker Build & Push to Docker Hub
   # Runs only on direct push to main (not on PRs).
+  #
+  # Condition: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  # This ensures:
+  #   ✅ Runs when code is pushed/merged to main
+  #   ❌ Skipped on pull requests (even PRs targeting main)
+  #   ❌ Never runs on feature branch pushes (workflow doesn't trigger)
+  #
   # Each service gets three tags:
   #   latest         → always the newest main build
   #   sha-<short>    → pinnable, immutable — used by the deploy job
@@ -192,6 +222,14 @@ jobs:
 
   # ──────────────────────────────────────────────────────────────────
   # JOB 3 · Deploy to EC2
+  # Runs only after docker-push succeeds (which only runs on main pushes).
+  #
+  # Condition: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  # This ensures:
+  #   ✅ Runs when code is pushed/merged to main (after docker-push)
+  #   ❌ Skipped on pull requests
+  #   ❌ Never runs on feature branch pushes (workflow doesn't trigger)
+  #
   # Waits for all 6 service images to be pushed to Docker Hub, then
   # SSHes into EC2 and performs a safe rolling deployment:
   #

@@ -1,6 +1,7 @@
 package com.agriconnect.api.gateway.Entity.User;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,6 +18,7 @@ import java.util.Collection;
 import java.util.List;
 
 @Entity
+@JsonIgnoreProperties(ignoreUnknown = true)
 @Table(name = "users", indexes = {
         @Index(name = "idx_user_phone", columnList = "phoneNumber", unique = true),
         @Index(name = "idx_user_email", columnList = "email", unique = true),
@@ -65,6 +67,7 @@ public class User implements UserDetails {
     private LocalDateTime updatedAt;
 
     @Override
+    @JsonIgnore
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of();
     }

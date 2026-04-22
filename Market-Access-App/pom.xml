@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.4.4</version> <!-- Updated for Java 24 support -->
+		<version>3.4.5</version>
 		<relativePath/>
 	</parent>
 	<groupId>com.agriconnect</groupId>
@@ -16,10 +16,10 @@
 
 	<properties>
 		<java.version>24</java.version>
-		<spring-cloud.version>2024.0.0</spring-cloud.version>
+		<spring-cloud.version>2024.0.1</spring-cloud.version>
 		<lombok.version>1.18.38</lombok.version>
-		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
-		<flyway.version>10.10.0</flyway.version>
+		<maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
+		<flyway.version>11.1.0</flyway.version>
 	</properties>
 
 	<dependencies>
@@ -77,6 +77,11 @@
 			<version>${lombok.version}</version>
 			<scope>provided</scope>
 		</dependency>
+		<!-- Caffeine in-process cache (Week 3) -->
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
@@ -111,15 +116,14 @@
 			<artifactId>spring-kafka</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>io.confluent</groupId>
-			<artifactId>kafka-avro-serializer</artifactId>
-			<version>7.7.1</version>
-		</dependency>
-		<dependency>
 			<groupId>org.apache.avro</groupId>
 			<artifactId>avro</artifactId>
-			<version>1.12.1</version>
-			<scope>compile</scope>
+			<version>1.12.0</version>
+		</dependency>
+		<dependency>
+			<groupId>io.confluent</groupId>
+			<artifactId>kafka-avro-serializer</artifactId>
+			<version>7.8.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.retry</groupId>
