@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-@Transactional
 public class ListingService {
 
     private static final Logger log = LoggerFactory.getLogger(ListingService.class);
@@ -65,6 +64,7 @@ public class ListingService {
         this.cacheService = cacheService;
     }
 
+    @Transactional
     public Listing addListing(ListingRequest listingRequest, List<MultipartFile> images) {
         log.info("Adding new listing for product: {}", listingRequest.getProductName());
 
@@ -183,6 +183,7 @@ public class ListingService {
         }
     }
 
+    @Transactional
     public Listing updateListing(String listingId, ListingRequest listingRequest, List<MultipartFile> images) {
         log.info("Updating listing with ID: {}", listingId);
         Listing existingListing = listingRepository.findById(listingId)
@@ -268,6 +269,7 @@ public class ListingService {
         }
     }
 
+    @Transactional(readOnly = true)
     public Listing getListingById(String listingId) {
         log.debug("Fetching listing with ID: {}", listingId);
         String cacheKey = "listing:" + listingId;
@@ -279,6 +281,7 @@ public class ListingService {
         });
     }
 
+    @Transactional(readOnly = true)
     public List<byte[]> getListingImages(String listingId) {
         log.debug("Fetching images for listing ID: {}", listingId);
         String cacheKey = LISTING_IMAGES_PREFIX + listingId;
@@ -312,6 +315,7 @@ public class ListingService {
         return images;
     }
 
+    @Transactional(readOnly = true)
     public List<Listing> getAllListings() {
         log.debug("Fetching all listings");
         return cacheService.get(ALL_LISTINGS_KEY, List.class).orElseGet(() -> {
@@ -322,6 +326,7 @@ public class ListingService {
         });
     }
 
+    @Transactional
     public void deleteListing(String listingId) {
         log.info("Deleting listing with ID: {}", listingId);
         Listing listing = listingRepository.findById(listingId)
@@ -364,6 +369,7 @@ public class ListingService {
         log.info("Listing deleted successfully with ID: {}", listingId);
     }
 
+    @Transactional
     public Listing updateListingStatus(String listingId, String status, String quantity) {
         log.info("Updating status for listing ID: {} to status: {}", listingId, status);
 
@@ -419,6 +425,7 @@ public class ListingService {
         return updated;
     }
 
+    @Transactional(readOnly = true)
     public List<Listing> getActiveListings() {
         log.debug("Fetching active listings");
         return cacheService.get(ACTIVE_LISTINGS_KEY, List.class).orElseGet(() -> {
@@ -429,6 +436,7 @@ public class ListingService {
         });
     }
 
+    @Transactional(readOnly = true)
     public List<Listing> getListingByFarmerContact(String farmerContact) {
         log.debug("Fetching listings for farmer contact: {}", farmerContact);
         String cacheKey = "listings:farmer:" + farmerContact;

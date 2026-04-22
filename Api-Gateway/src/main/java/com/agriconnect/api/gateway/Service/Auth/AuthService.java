@@ -45,7 +45,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
-@Transactional
 public class AuthService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
@@ -94,6 +93,7 @@ public class AuthService {
         this.cacheService = cacheService;
     }
 
+    @Transactional
     public User registerUser(FarmerRegisterRequest farmerRegisterRequest) {
         logger.info("Attempting to register user with phone number: {}", farmerRegisterRequest.getPhoneNumber());
 
@@ -128,6 +128,7 @@ public class AuthService {
         return savedUser;
     }
 
+    @Transactional
     public JwtResponse login(JwtRequest jwtRequest, HttpServletResponse response) {
         logger.info("Login attempt for username: {}", jwtRequest.getUsername());
 
@@ -226,6 +227,7 @@ public class AuthService {
         }
     }
 
+    @Transactional(readOnly = true)
     public User getCurrentUser() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
@@ -257,6 +259,7 @@ public class AuthService {
         return null;
     }
 
+    @Transactional(readOnly = true)
     public boolean isValidSessionId(String sessionId) {
         Optional<Session> sessionOpt = sessionRepository.findBySessionId(sessionId);
         if (sessionOpt.isPresent()) {
@@ -266,6 +269,7 @@ public class AuthService {
         return false;
     }
 
+    @Transactional
     public void saveSessionId(String username, String sessionId) {
         logger.debug("Saving session for user: {}", username);
         Session session = new Session();

@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
@@ -35,7 +35,7 @@ public class ColdStorageService {
     private final BookingRepository bookingRepository;
     private final EmailService emailService;
     private final ColdStorageRepository coldStorageRepository;
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final ObjectMapper objectMapper;
     private final NotificationEventPublisher notificationEventPublisher;
     private final CacheService cacheService;
@@ -60,14 +60,14 @@ public class ColdStorageService {
 
     @Autowired
     public ColdStorageService(BookingRepository bookingRepository, EmailService emailService,
-            ColdStorageRepository coldStorageRepository, RestTemplate restTemplate,
+            ColdStorageRepository coldStorageRepository, RestClient restClient,
             ObjectMapper objectMapper,
             NotificationEventPublisher notificationEventPublisher,
             CacheService cacheService) {
         this.bookingRepository = bookingRepository;
         this.emailService = emailService;
         this.coldStorageRepository = coldStorageRepository;
-        this.restTemplate = restTemplate;
+        this.restClient = restClient;
         this.objectMapper = objectMapper;
         this.notificationEventPublisher = notificationEventPublisher;
         this.cacheService = cacheService;
@@ -168,7 +168,10 @@ public class ColdStorageService {
                 .toUriString();
 
         System.out.println("Fetching from URL: " + url);
-        String response = restTemplate.getForObject(url, String.class);
+        String response = restClient.get()
+                .uri(url)
+                .retrieve()
+                .body(String.class);
         if (response == null) {
             throw new IOException("Failed to fetch data from Google Places API");
         }
@@ -230,7 +233,10 @@ public class ColdStorageService {
         System.out.println(district + " " + state);
 
         // Make API request
-        String response = restTemplate.getForObject(url, String.class);
+        String response = restClient.get()
+                .uri(url)
+                .retrieve()
+                .body(String.class);
         if (response == null) {
             throw new IOException("Failed to fetch data from Google Places API");
         }

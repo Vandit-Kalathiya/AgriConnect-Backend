@@ -233,6 +233,7 @@ Backend/
     ├── PRODUCTION_DB_MIGRATION_GUIDE.md
     ├── DEPLOYMENT_FLAG_GUIDE.md
     ├── DEPLOYMENT_QUICK_REFERENCE.md
+    ├── CI_CD_BRANCH_STRATEGY.md            # ✅ Branch-specific pipeline behavior
     ├── CACHE_IMPLEMENTATION_COMPLETE.md    # ✅ Complete caching guide
     ├── CACHE_CONFIGURATION_GUIDE.md
     ├── MULTI_SERVICE_CACHE_IMPLEMENTATION.md
@@ -266,6 +267,10 @@ For production DB migration procedures, use:
 For CI/CD deployment control (enable/disable EC2 deployment), use:
 
 - `docs/DEPLOYMENT_FLAG_GUIDE.md`
+
+For CI/CD branch strategy and pipeline behavior (when pipelines run), use:
+
+- `docs/CI_CD_BRANCH_STRATEGY.md`
 
 For Redis/Valkey caching setup and usage (complete end-to-end implementation), use:
 

@@ -44,8 +44,8 @@ services:
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
       CACHE_PROD_ENABLED: ${CACHE_PROD_ENABLED:-true}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-localhost}
+      REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       VALKEY_URL: ${VALKEY_URL:-}
       VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
@@ -63,8 +63,6 @@ services:
       kafka:
         condition: service_healthy
       schema-registry:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
@@ -96,8 +94,8 @@ services:
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
       CACHE_PROD_ENABLED: ${CACHE_PROD_ENABLED:-true}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-localhost}
+      REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       VALKEY_URL: ${VALKEY_URL:-}
       VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
@@ -135,8 +133,8 @@ services:
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
       CACHE_PROD_ENABLED: ${CACHE_PROD_ENABLED:-true}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-localhost}
+      REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       VALKEY_URL: ${VALKEY_URL:-}
       VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
@@ -174,8 +172,8 @@ services:
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
       CACHE_PROD_ENABLED: ${CACHE_PROD_ENABLED:-true}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-localhost}
+      REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       VALKEY_URL: ${VALKEY_URL:-}
       VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
@@ -192,27 +190,6 @@ services:
       timeout: 10s
       retries: 10
       start_period: 60s
-    networks:
-      - agriconnect
-
-  # ── Redis (Local Development Caching) ───────────────────────────────────────
-  # This is ONLY for local development. Enable with CACHE_LOCAL_ENABLED=true
-  # In production, use AWS ElastiCache for Valkey with CACHE_PROD_ENABLED=true
-  redis:
-    image: redis:7-alpine
-    container_name: agriconnect-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
     networks:
       - agriconnect
 
@@ -343,8 +320,8 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
       CACHE_PROD_ENABLED: ${CACHE_PROD_ENABLED:-true}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-localhost}
+      REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       VALKEY_URL: ${VALKEY_URL:-}
       VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
@@ -406,6 +383,5 @@ networks:
 
 volumes:
   kafka-data:
-  redis-data:
   prometheus-data:
   grafana-data:
