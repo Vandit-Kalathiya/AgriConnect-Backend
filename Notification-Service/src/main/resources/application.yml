@@ -208,8 +208,10 @@ spring:
       on-profile: prod
   data:
     redis:
-      url: ${VALKEY_URL}
-      password: ${VALKEY_PASSWORD:}
+      host: ${VALKEY_HOST}
+      port: ${VALKEY_PORT:6379}
+      username: ${VALKEY_USERNAME:default}
+      password: ${VALKEY_PASSWORD}
       ssl:
         enabled: ${VALKEY_SSL_ENABLED:true}
       timeout: 2000ms
