@@ -11,4 +11,4 @@
 # Default: false (safe for development)
 # ============================================================
 
-ENABLE_DEPLOYMENT=false
+ENABLE_DEPLOYMENT=true
