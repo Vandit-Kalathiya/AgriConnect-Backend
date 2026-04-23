@@ -1,0 +1,88 @@
+groups:
+  - name: memory_alerts
+    interval: 30s
+    rules:
+      # Alert when container memory usage exceeds 80% of limit
+      - alert: HighContainerMemoryUsage
+        expr: |
+          (container_memory_usage_bytes{name=~"agriconnect-.*"} / container_spec_memory_limit_bytes{name=~"agriconnect-.*"}) * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+          category: memory
+        annotations:
+          summary: "High memory usage on {{ $labels.name }}"
+          description: "Container {{ $labels.name }} is using {{ $value | humanize }}% of its memory limit (threshold: 80%)"
+
+      # Alert when container memory usage exceeds 90% of limit (critical)
+      - alert: CriticalContainerMemoryUsage
+        expr: |
+          (container_memory_usage_bytes{name=~"agriconnect-.*"} / container_spec_memory_limit_bytes{name=~"agriconnect-.*"}) * 100 > 90
+        for: 1m
+        labels:
+          severity: critical
+          category: memory
+        annotations:
+          summary: "CRITICAL: Very high memory usage on {{ $labels.name }}"
+          description: "Container {{ $labels.name }} is using {{ $value | humanize }}% of its memory limit. OOM kill imminent!"
+
+      # Alert when JVM heap usage is high
+      - alert: HighJVMHeapUsage
+        expr: |
+          (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+          category: jvm
+        annotations:
+          summary: "High JVM heap usage on {{ $labels.service }}"
+          description: "Service {{ $labels.service }} JVM heap is {{ $value | humanize }}% full"
+
+      # Alert when container is restarting frequently
+      - alert: ContainerRestartingFrequently
+        expr: |
+          rate(container_last_seen{name=~"agriconnect-.*"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          category: stability
+        annotations:
+          summary: "Container {{ $labels.name }} is restarting frequently"
+          description: "Container {{ $labels.name }} has restarted multiple times in the last 5 minutes. Check for OOM kills."
+
+      # Alert when system memory is running low
+      - alert: HostMemoryLow
+        expr: |
+          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 15
+        for: 2m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "Host system memory is running low"
+          description: "Only {{ $value | humanize }}% of system memory is available. Consider stopping non-essential services."
+
+  - name: service_health_alerts
+    interval: 30s
+    rules:
+      # Alert when service is down
+      - alert: ServiceDown
+        expr: up{job=~"api-gateway|market-access|contract-farming|generate-agreement|notification-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been unreachable for more than 1 minute"
+
+      # Alert when Kafka is down
+      - alert: KafkaDown
+        expr: up{job="cadvisor",name="agriconnect-kafka"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Kafka broker is down"
+          description: "Kafka has been down for more than 2 minutes. Message processing is halted."
