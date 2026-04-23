@@ -28,8 +28,10 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=5 --start-period=40s \
 ENTRYPOINT ["java", \
   "-XX:+UseZGC", \
   "-XX:+ZGenerational", \
-  "-Xms256m", \
-  "-Xmx1g", \
+  "-Xms128m", \
+  "-Xmx256m", \
   "-XX:MaxGCPauseMillis=100", \
+  "-XX:MaxRAMPercentage=75.0", \
+  "-XX:+UseStringDeduplication", \
   "-Dspring.threads.virtual.enabled=true", \
   "-jar", "app.jar"]
