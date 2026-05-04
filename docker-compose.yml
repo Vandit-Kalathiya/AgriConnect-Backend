@@ -11,13 +11,14 @@ services:
     environment:
       PORT: 8761
       SPRING_PROFILES_ACTIVE: prod
+
       EUREKA_HOSTNAME: eureka-server
     deploy:
       resources:
         limits:
-          memory: 384M
+          memory: 512M
         reservations:
-          memory: 192M
+          memory: 256M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
       interval: 15s
