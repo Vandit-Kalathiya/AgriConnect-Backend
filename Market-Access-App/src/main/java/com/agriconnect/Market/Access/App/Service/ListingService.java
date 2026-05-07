@@ -1,6 +1,8 @@
 package com.agriconnect.Market.Access.App.Service;
 
 import com.agriconnect.Market.Access.App.Dto.ListingRequest;
+import com.agriconnect.Market.Access.App.Dto.ListingResponse;
+import com.agriconnect.Market.Access.App.Dto.ListingListResponse;
 import com.agriconnect.Market.Access.App.Entity.Image;
 import com.agriconnect.Market.Access.App.Entity.Listing;
 import com.agriconnect.Market.Access.App.Entity.ListingStatus;
@@ -41,10 +43,11 @@ public class ListingService {
     private static final String LISTING_IMAGES_PREFIX = "listing:images:";
     private static final String IMAGE_DATA_PREFIX = "image:data:";
 
-    private static final Duration SINGLE_TTL = Duration.ofHours(2);
-    private static final Duration LIST_TTL = Duration.ofMinutes(30);
-    private static final Duration FARMER_TTL = Duration.ofHours(1);
-    private static final Duration IMAGE_TTL = Duration.ofHours(24);
+    private static final Duration DETAIL_TTL = Duration.ofHours(1);
+    private static final Duration LIST_TTL = Duration.ofMinutes(15);
+    private static final Duration ACTIVE_LIST_TTL = Duration.ofMinutes(10);
+    private static final Duration FARMER_LIST_TTL = Duration.ofMinutes(30);
+    private static final Duration IMAGE_TTL = Duration.ofHours(6);
 
     private final ListingRepository listingRepository;
     private final ImageRepository imageRepository;
@@ -65,7 +68,7 @@ public class ListingService {
     }
 
     @Transactional
-    public Listing addListing(ListingRequest listingRequest, List<MultipartFile> images) {
+    public ListingResponse addListing(ListingRequest listingRequest, List<MultipartFile> images) {
         log.info("Adding new listing for product: {}", listingRequest.getProductName());
 
         try {
@@ -169,7 +172,7 @@ public class ListingService {
             }
 
             log.info("Listing added successfully with ID: {}", listing.getId());
-            return listing;
+            return convertToListingResponse(listing);
 
         } catch (NumberFormatException e) {
             log.error("Invalid number format in listing request", e);
@@ -184,7 +187,7 @@ public class ListingService {
     }
 
     @Transactional
-    public Listing updateListing(String listingId, ListingRequest listingRequest, List<MultipartFile> images) {
+    public ListingResponse updateListing(String listingId, ListingRequest listingRequest, List<MultipartFile> images) {
         log.info("Updating listing with ID: {}", listingId);
         Listing existingListing = listingRepository.findById(listingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
@@ -258,7 +261,7 @@ public class ListingService {
             for (Image img : updated.getImages()) {
                 cacheService.evict(IMAGE_DATA_PREFIX + img.getId());
             }
-            return updated;
+            return convertToListingResponse(updated);
 
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid number format in listing request", e);
@@ -270,15 +273,87 @@ public class ListingService {
     }
 
     @Transactional(readOnly = true)
-    public Listing getListingById(String listingId) {
+    public ListingResponse getListingById(String listingId) {
         log.debug("Fetching listing with ID: {}", listingId);
         String cacheKey = "listing:" + listingId;
-        return cacheService.get(cacheKey, Listing.class).orElseGet(() -> {
+        return cacheService.get(cacheKey, ListingResponse.class).orElseGet(() -> {
             Listing listing = listingRepository.findById(listingId)
                     .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
-            cacheService.save(cacheKey, listing, LIST_TTL);
-            return listing;
+
+            ListingResponse response = convertToListingResponse(listing);
+            cacheService.save(cacheKey, response, DETAIL_TTL);
+            return response;
         });
+    }
+
+    private ListingResponse convertToListingResponse(Listing listing) {
+        List<ListingResponse.ImageInfo> imageInfoList = listing.getImages().stream()
+                .map(image -> ListingResponse.ImageInfo.builder()
+                        .id(image.getId())
+                        .fileName(image.getFileName())
+                        .fileType(image.getFileType())
+                        .size(image.getSize())
+                        .downloadUrl(image.getDownloadUrl())
+                        .data(image.getData())
+                        .createDate(image.getCreateDate())
+                        .createTime(image.getCreateTime())
+                        .build())
+                .toList();
+
+        return ListingResponse.builder()
+                .id(listing.getId())
+                .productName(listing.getProductName())
+                .productDescription(listing.getProductDescription())
+                .productType(listing.getProductType())
+                .finalPrice(listing.getFinalPrice())
+                .aiGeneratedPrice(listing.getAiGeneratedPrice())
+                .harvestedDate(listing.getHarvestedDate())
+                .availabilityDate(listing.getAvailabilityDate())
+                .qualityGrade(listing.getQualityGrade())
+                .storageCondition(listing.getStorageCondition())
+                .quantity(listing.getQuantity())
+                .unitOfQuantity(listing.getUnitOfQuantity())
+                .location(listing.getLocation())
+                .certifications(listing.getCertifications())
+                .shelfLifetime(listing.getShelfLifetime())
+                .contactOfFarmer(listing.getContactOfFarmer())
+                .rating(listing.getRating())
+                .status(listing.getStatus())
+                .createdDate(listing.getCreatedDate())
+                .lastUpdatedDate(listing.getLastUpdatedDate())
+                .createdTime(listing.getCreatedTime())
+                .images(imageInfoList)
+                .build();
+    }
+
+    private ListingListResponse convertToListingListResponse(Listing listing) {
+        return ListingListResponse.builder()
+                .id(listing.getId())
+                .productName(listing.getProductName())
+                .productDescription(listing.getProductDescription())
+                .productType(listing.getProductType())
+                .finalPrice(listing.getFinalPrice())
+                .aiGeneratedPrice(listing.getAiGeneratedPrice())
+                .harvestedDate(listing.getHarvestedDate())
+                .availabilityDate(listing.getAvailabilityDate())
+                .qualityGrade(listing.getQualityGrade())
+                .storageCondition(listing.getStorageCondition())
+                .quantity(listing.getQuantity())
+                .unitOfQuantity(listing.getUnitOfQuantity())
+                .location(listing.getLocation())
+                .certifications(listing.getCertifications())
+                .shelfLifetime(listing.getShelfLifetime())
+                .contactOfFarmer(listing.getContactOfFarmer())
+                .rating(listing.getRating())
+                .status(listing.getStatus())
+                .createdDate(listing.getCreatedDate())
+                .lastUpdatedDate(listing.getLastUpdatedDate())
+                .createdTime(listing.getCreatedTime())
+                .imageCount(listing.getImages() != null ? listing.getImages().size() : 0)
+                .thumbnailFileName(listing.getImages() != null && !listing.getImages().isEmpty()
+                        ? listing.getImages().get(0).getFileName()
+                        : null)
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -316,13 +391,15 @@ public class ListingService {
     }
 
     @Transactional(readOnly = true)
-    public List<Listing> getAllListings() {
+    public List<ListingListResponse> getAllListings() {
         log.debug("Fetching all listings");
         return cacheService.get(ALL_LISTINGS_KEY, List.class).orElseGet(() -> {
-            // Don't cache with images - causes serialization issues
             List<Listing> listings = listingRepository.findAll();
-            cacheService.save(ALL_LISTINGS_KEY, listings, LIST_TTL);
-            return listings;
+            List<ListingListResponse> response = listings.stream()
+                    .map(this::convertToListingListResponse)
+                    .toList();
+            cacheService.save(ALL_LISTINGS_KEY, response, LIST_TTL);
+            return response;
         });
     }
 
@@ -370,7 +447,7 @@ public class ListingService {
     }
 
     @Transactional
-    public Listing updateListingStatus(String listingId, String status, String quantity) {
+    public ListingResponse updateListingStatus(String listingId, String status, String quantity) {
         log.info("Updating status for listing ID: {} to status: {}", listingId, status);
 
         Listing existingListing = listingRepository.findById(listingId)
@@ -422,30 +499,34 @@ public class ListingService {
             log.warn("[NOTIFY] Failed to publish listing status event for listing={}: {}", listingId, ex.getMessage());
         }
 
-        return updated;
+        return convertToListingResponse(updated);
     }
 
     @Transactional(readOnly = true)
-    public List<Listing> getActiveListings() {
+    public List<ListingResponse> getActiveListings() {
         log.debug("Fetching active listings");
         return cacheService.get(ACTIVE_LISTINGS_KEY, List.class).orElseGet(() -> {
-            // Don't cache with images - causes serialization issues
             List<Listing> listings = listingRepository.findActiveListings();
-            cacheService.save(ACTIVE_LISTINGS_KEY, listings, LIST_TTL);
-            return listings;
+            List<ListingResponse> response = listings.stream()
+                    .map(this::convertToListingResponse)
+                    .toList();
+            cacheService.save(ACTIVE_LISTINGS_KEY, response, ACTIVE_LIST_TTL);
+            return response;
         });
     }
 
     @Transactional(readOnly = true)
-    public List<Listing> getListingByFarmerContact(String farmerContact) {
+    public List<ListingResponse> getListingByFarmerContact(String farmerContact) {
         log.debug("Fetching listings for farmer contact: {}", farmerContact);
         String cacheKey = "listings:farmer:" + farmerContact;
         return cacheService.get(cacheKey, List.class).orElseGet(() -> {
-            // Don't cache with images - causes serialization issues
             List<Listing> listings = listingRepository.findByContactOfFarmer(farmerContact)
                     .orElseThrow(() -> new ResourceNotFoundException("Listing", "farmerContact", farmerContact));
-            cacheService.save(cacheKey, listings, Duration.ofHours(1));
-            return listings;
+            List<ListingResponse> response = listings.stream()
+                    .map(this::convertToListingResponse)
+                    .toList();
+            cacheService.save(cacheKey, response, FARMER_LIST_TTL);
+            return response;
         });
     }
 }

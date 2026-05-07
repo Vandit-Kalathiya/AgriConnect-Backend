@@ -1,7 +1,8 @@
 package com.agriconnect.Market.Access.App.Controller;
 
 import com.agriconnect.Market.Access.App.Dto.ListingRequest;
-import com.agriconnect.Market.Access.App.Entity.Listing;
+import com.agriconnect.Market.Access.App.Dto.ListingResponse;
+import com.agriconnect.Market.Access.App.Dto.ListingListResponse;
 import com.agriconnect.Market.Access.App.Service.ListingService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +29,7 @@ public class ListingController {
             @RequestPart("images") List<MultipartFile> images,
             @ModelAttribute ListingRequest listingRequest) {
         try {
-            Listing listing = listingService.addListing(listingRequest, images);
+            ListingResponse listing = listingService.addListing(listingRequest, images);
             return ResponseEntity.ok(listing);
         } catch (Exception e) {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.BAD_REQUEST);
@@ -41,7 +42,7 @@ public class ListingController {
             @RequestPart(value = "images", required = false) List<MultipartFile> images,
             @ModelAttribute ListingRequest listingRequest) {
         try {
-            Listing listing = listingService.updateListing(id, listingRequest, images);
+            ListingResponse listing = listingService.updateListing(id, listingRequest, images);
             return ResponseEntity.ok(listing);
         } catch (Exception e) {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.BAD_REQUEST);
@@ -51,8 +52,8 @@ public class ListingController {
     @GetMapping("/get/{id}")
     public ResponseEntity<?> getListingById(@PathVariable String id) {
         try {
-            Listing listing = listingService.getListingById(id);
-            return ResponseEntity.ok(listing);
+            ListingResponse listingResponse = listingService.getListingById(id);
+            return ResponseEntity.ok(listingResponse);
         } catch (EntityNotFoundException e) {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.NOT_FOUND);
         } catch (Exception e) {
@@ -68,7 +69,7 @@ public class ListingController {
     @GetMapping("/all")
     public ResponseEntity<?> getAllListings() {
         try {
-            List<Listing> listings = listingService.getAllListings();
+            List<ListingListResponse> listings = listingService.getAllListings();
             return ResponseEntity.ok(listings);
         } catch (Exception e) {
             return new ResponseEntity<>("Unexpected error: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -86,9 +87,10 @@ public class ListingController {
     }
 
     @PutMapping("/{id}/{status}/{quantity}")
-    public ResponseEntity<?> updateListingStatus(@PathVariable String id, @PathVariable String status, @PathVariable String quantity) {
+    public ResponseEntity<?> updateListingStatus(@PathVariable String id, @PathVariable String status,
+            @PathVariable String quantity) {
         try {
-            Listing updatedListing = listingService.updateListingStatus(id, status, quantity);
+            ListingResponse updatedListing = listingService.updateListingStatus(id, status, quantity);
             return ResponseEntity.ok(updatedListing);
         } catch (EntityNotFoundException e) {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.NOT_FOUND);
@@ -100,7 +102,7 @@ public class ListingController {
     @GetMapping("/all/active")
     public ResponseEntity<?> getAllActiveListings() {
         try {
-            List<Listing> activeListings = listingService.getActiveListings();
+            List<ListingResponse> activeListings = listingService.getActiveListings();
             return ResponseEntity.ok(activeListings);
         } catch (Exception e) {
             return new ResponseEntity<>("Unexpected error: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -110,7 +112,7 @@ public class ListingController {
     @GetMapping("/user/{userContact}")
     public ResponseEntity<?> getListingByUserContact(@PathVariable String userContact) {
         try {
-            List<Listing> listing = listingService.getListingByFarmerContact(userContact);
+            List<ListingResponse> listing = listingService.getListingByFarmerContact(userContact);
             return ResponseEntity.ok(listing);
         } catch (EntityNotFoundException e) {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.NOT_FOUND);
