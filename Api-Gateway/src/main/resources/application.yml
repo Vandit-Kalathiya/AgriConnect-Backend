@@ -107,22 +107,26 @@ spring:
       request.timeout.ms: 10000
       delivery.timeout.ms: 30000
 
-  # ── Redis Configuration (Local Development) ────────────────────────────────────
+  # ── Redis/Valkey Configuration ────────────────────────────────────
+  # Only used when CACHE_ENABLED=true
   data:
     redis:
-      host: ${VALKEY_HOST}
+      host: ${VALKEY_HOST:localhost}
       port: ${VALKEY_PORT:6379}
-      username: ${VALKEY_USERNAME:default}
-      password: ${VALKEY_PASSWORD}
+      password: ${VALKEY_PASSWORD:}
       ssl:
-        enabled: ${VALKEY_SSL_ENABLED:true}
+        enabled: ${VALKEY_SSL_ENABLED:false}
       timeout: 2000ms
       lettuce:
         pool:
-          max-active: 10
-          max-idle: 5
-          min-idle: 2
+          max-active: ${VALKEY_POOL_MAX_ACTIVE:20}
+          max-idle: ${VALKEY_POOL_MAX_IDLE:10}
+          min-idle: ${VALKEY_POOL_MIN_IDLE:5}
           max-wait: 500ms
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 cors:
@@ -176,7 +180,7 @@ jwt:
 # ── Feature Flags ─────────────────────────────────────────────────────────────
 # FEATURE_MOBILE_VERIFICATION_ENABLED: controls dual OTP (email+mobile) on registration
 # FEATURE_KAFKA_ENABLED: set true only when Kafka + Schema Registry are running locally
-# CACHE_LOCAL_ENABLED / redis.enabled: set true only when Redis is running locally
+# CACHE_LOCAL_ENABLED / cache.enabled: set true only when Redis is running locally
 # Mirror all flags in frontend .env as VITE_FEATURE_<NAME>
 feature:
   mobile-verification:
@@ -185,13 +189,9 @@ feature:
     enabled: ${FEATURE_KAFKA_ENABLED:false}
 
 # ── Caching Configuration ─────────────────────────────────────────────────────
-# Local: Use Redis with CACHE_LOCAL_ENABLED=true
-# Production: Use Valkey with CACHE_PROD_ENABLED=true
+# Enable/disable Redis/Valkey caching via CACHE_ENABLED environment variable
 cache:
-  enabled: ${CACHE_PROD_ENABLED:false}
-
-redis:
-  enabled: ${CACHE_LOCAL_ENABLED:false}
+  enabled: ${CACHE_ENABLED:false}
 
 # ── Circuit Breaker (Resilience4j) ───────────────────────────────────────────
 resilience4j:
@@ -270,6 +270,9 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  health:
+    redis:
+      enabled: ${cache.enabled:false}
   appoptics:
     metrics:
       export:
@@ -278,35 +281,6 @@ management:
 notification:
   topics:
     auth: agriconnect.notifications.auth
-
----
-# ── Production profile — AWS ElastiCache Valkey with TLS ──────────────────────
-spring:
-  config:
-    activate:
-      on-profile: prod
-  data:
-    redis:
-      host: ${VALKEY_HOST}
-      port: ${VALKEY_PORT:6379}
-      username: ${VALKEY_USERNAME:default}
-      password: ${VALKEY_PASSWORD}
-      ssl:
-        enabled: ${VALKEY_SSL_ENABLED:true}
-      timeout: 2000ms
-      lettuce:
-        pool:
-          max-active: 20
-          max-idle: 10
-          min-idle: 5
-          max-wait: 500ms
-
-# Override cache configuration for production
-cache:
-  enabled: ${CACHE_PROD_ENABLED:true}
-
-redis:
-  enabled: false # Disable local Redis beans when using ElastiCache
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging:

@@ -71,16 +71,13 @@ spring:
       timeout: 2000ms
       lettuce:
         pool:
-          max-active: 10
-          max-idle: 5
-          min-idle: 2
+          max-active: ${VALKEY_POOL_MAX_ACTIVE:20}
+          max-idle: ${VALKEY_POOL_MAX_IDLE:10}
+          min-idle: ${VALKEY_POOL_MIN_IDLE:5}
           max-wait: 500ms
 
 cache:
-  enabled: ${CACHE_PROD_ENABLED:false}
-
-redis:
-  enabled: ${CACHE_LOCAL_ENABLED:false}
+  enabled: ${CACHE_ENABLED:false}
 
 feature:
   kafka:
@@ -131,34 +128,6 @@ management:
   endpoint:
     health:
       show-details: when-authorized
-
----
-# ── Production profile — AWS ElastiCache Valkey with TLS ──────────────────────
-spring:
-  config:
-    activate:
-      on-profile: prod
-  data:
-    redis:
-      host: ${VALKEY_HOST}
-      port: ${VALKEY_PORT:6379}
-      username: ${VALKEY_USERNAME:default}
-      password: ${VALKEY_PASSWORD}
-      ssl:
-        enabled: ${VALKEY_SSL_ENABLED:true}
-      timeout: 2000ms
-      lettuce:
-        pool:
-          max-active: 20
-          max-idle: 10
-          min-idle: 5
-          max-wait: 500ms
-
-cache:
-  enabled: ${CACHE_PROD_ENABLED:true}
-
-redis:
-  enabled: false # Disable local Redis beans when using ElastiCache
 
 springdoc:
   api-docs:

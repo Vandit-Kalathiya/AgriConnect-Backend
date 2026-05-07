@@ -16,7 +16,7 @@ public class FeatureFlagsController {
     @Value("${feature.kafka.enabled:false}")
     private boolean kafkaEnabled;
 
-    @Value("${redis.enabled:false}")
+    @Value("${cache.enabled:false}")
     private boolean redisEnabled;
 
     @Value("${feature.mobile-verification.enabled:true}")

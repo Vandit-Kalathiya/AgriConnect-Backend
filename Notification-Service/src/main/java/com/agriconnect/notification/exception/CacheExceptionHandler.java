@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 
 @Aspect
 @Component
-@ConditionalOnProperty(name = "redis.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "cache.enabled", havingValue = "true", matchIfMissing = false)
 public class CacheExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(CacheExceptionHandler.class);

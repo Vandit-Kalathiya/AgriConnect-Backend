@@ -9,7 +9,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnProperty(name = "redis.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "cache.enabled", havingValue = "true", matchIfMissing = false)
 public class RedisHealthIndicator implements HealthIndicator {
 
     private static final Logger logger = LoggerFactory.getLogger(RedisHealthIndicator.class);

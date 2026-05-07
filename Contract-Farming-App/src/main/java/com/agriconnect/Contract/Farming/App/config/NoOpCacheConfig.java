@@ -11,15 +11,16 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 @EnableCaching
-@ConditionalOnProperty(name = "redis.enabled", havingValue = "false", matchIfMissing = true)
+@ConditionalOnProperty(name = "cache.enabled", havingValue = "false", matchIfMissing = true)
 public class NoOpCacheConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(NoOpCacheConfig.class);
 
     @Bean
     public CacheManager cacheManager() {
-        logger.warn("Redis/Valkey caching is DISABLED. Using NoOpCacheManager. All @Cacheable annotations will be no-ops.");
-        logger.warn("To enable caching, set redis.enabled=true in application properties");
+        logger.warn(
+                "Redis/Valkey caching is DISABLED. Using NoOpCacheManager. All @Cacheable annotations will be no-ops.");
+        logger.warn("To enable caching, set cache.enabled=true in application properties");
         return new NoOpCacheManager();
     }
 }

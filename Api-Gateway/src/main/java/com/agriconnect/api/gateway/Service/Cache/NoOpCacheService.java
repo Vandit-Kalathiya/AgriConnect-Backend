@@ -9,7 +9,7 @@ import java.time.Duration;
 import java.util.Optional;
 
 @Service
-@ConditionalOnProperty(name = "redis.enabled", havingValue = "false", matchIfMissing = true)
+@ConditionalOnProperty(name = "cache.enabled", havingValue = "false", matchIfMissing = true)
 public class NoOpCacheService extends CacheService {
 
     private static final Logger logger = LoggerFactory.getLogger(NoOpCacheService.class);

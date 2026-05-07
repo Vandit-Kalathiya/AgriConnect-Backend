@@ -27,7 +27,7 @@ public class EmailOtpService {
     private final CacheService cacheService;
     private final Random random = new Random();
 
-    @Value("${redis.enabled:false}")
+    @Value("${cache.enabled:false}")
     private boolean redisEnabled;
 
     @Autowired

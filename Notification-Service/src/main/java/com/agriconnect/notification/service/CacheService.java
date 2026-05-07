@@ -14,14 +14,14 @@ import java.util.Optional;
 import java.util.Set;
 
 @Service
-@ConditionalOnProperty(name = "redis.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "cache.enabled", havingValue = "true", matchIfMissing = false)
 public class CacheService {
 
     private static final Logger logger = LoggerFactory.getLogger(CacheService.class);
 
     private final RedisTemplate<String, Object> redisTemplate;
 
-    @Value("${redis.enabled:false}")
+    @Value("${cache.enabled:false}")
     private boolean redisEnabled;
 
     @Autowired

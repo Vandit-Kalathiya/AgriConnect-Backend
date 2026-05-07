@@ -25,7 +25,7 @@ import java.util.Map;
 
 @Configuration
 @EnableCaching
-@ConditionalOnProperty(name = "redis.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "cache.enabled", havingValue = "true", matchIfMissing = false)
 public class RedisConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(RedisConfig.class);
@@ -33,20 +33,20 @@ public class RedisConfig {
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
         logger.info("Initializing RedisTemplate with Valkey-compatible configuration");
-        
+
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
-        
+
         StringRedisSerializer stringSerializer = new StringRedisSerializer();
         GenericJackson2JsonRedisSerializer jsonSerializer = createJsonSerializer();
-        
+
         template.setKeySerializer(stringSerializer);
         template.setHashKeySerializer(stringSerializer);
         template.setValueSerializer(jsonSerializer);
         template.setHashValueSerializer(jsonSerializer);
-        
+
         template.afterPropertiesSet();
-        
+
         logger.info("RedisTemplate initialized successfully");
         return template;
     }
@@ -54,17 +54,18 @@ public class RedisConfig {
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         logger.info("Configuring RedisCacheManager with per-cache TTL settings");
-        
+
         GenericJackson2JsonRedisSerializer jsonSerializer = createJsonSerializer();
-        
+
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofHours(1))
-                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeKeysWith(
+                        RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer))
                 .disableCachingNullValues();
 
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
-        
+
         cacheConfigurations.put("contractCache", defaultConfig.entryTtl(Duration.ofHours(6)));
         cacheConfigurations.put("orderCache", defaultConfig.entryTtl(Duration.ofHours(2)));
         cacheConfigurations.put("paymentCache", defaultConfig.entryTtl(Duration.ofHours(1)));
@@ -84,15 +85,14 @@ public class RedisConfig {
     private GenericJackson2JsonRedisSerializer createJsonSerializer() {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
-        
+
         objectMapper.activateDefaultTyping(
                 BasicPolymorphicTypeValidator.builder()
                         .allowIfBaseType(Object.class)
                         .build(),
                 ObjectMapper.DefaultTyping.NON_FINAL,
-                JsonTypeInfo.As.PROPERTY
-        );
-        
+                JsonTypeInfo.As.PROPERTY);
+
         return new GenericJackson2JsonRedisSerializer(objectMapper);
     }
 }
