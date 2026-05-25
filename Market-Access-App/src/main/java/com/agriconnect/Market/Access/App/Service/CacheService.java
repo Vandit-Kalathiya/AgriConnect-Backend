@@ -34,7 +34,14 @@ public class CacheService {
         if (!redisEnabled) return Optional.empty();
         try {
             Object value = redisTemplate.opsForValue().get(key);
-            if (value != null && type.isInstance(value)) {
+            if (value == null) {
+                return Optional.empty();
+            }
+            if (value instanceof String && type == byte[].class) {
+                logger.debug("Cache hit (Base64 decoded byte[]) for key: {}", key);
+                return Optional.of(type.cast(java.util.Base64.getDecoder().decode((String) value)));
+            }
+            if (type.isInstance(value)) {
                 logger.debug("Cache hit for key: {}", key);
                 return Optional.of(type.cast(value));
             }

@@ -52,9 +52,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1536M
+          memory: 2048M
         reservations:
-          memory: 756M
+          memory: 1024M
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -101,9 +101,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1536M
+          memory: 2048M
         reservations:
-          memory: 512M
+          memory: 1024M
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -139,9 +139,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1536M
+          memory: 2048M
         reservations:
-          memory: 512M
+          memory: 1024M
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -177,9 +177,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1536M
+          memory: 2048M
         reservations:
-          memory: 512M
+          memory: 1024M
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -344,9 +344,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1536M
+          memory: 2048M
         reservations:
-          memory: 512M
+          memory: 1024M
     depends_on:
       eureka-server:
         condition: service_healthy

@@ -29,7 +29,7 @@ ENTRYPOINT ["java", \
   "-XX:+UseZGC", \
   "-XX:+ZGenerational", \
   "-Xms256m", \
-  "-Xmx768m", \
+  "-Xmx1024m", \
   "-XX:MaxGCPauseMillis=100", \
   "-XX:MaxRAMPercentage=75.0", \
   "-XX:+UseStringDeduplication", \

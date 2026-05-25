@@ -45,6 +45,9 @@ public class CacheService {
             }
             
             logger.debug("Cache hit for key: {}", key);
+            if (value instanceof String && type == byte[].class) {
+                return Optional.of(type.cast(java.util.Base64.getDecoder().decode((String) value)));
+            }
             return Optional.of(type.cast(value));
         } catch (RedisConnectionFailureException e) {
             logger.warn("Redis connection failed while getting key: {}. Degrading gracefully.", key, e);
