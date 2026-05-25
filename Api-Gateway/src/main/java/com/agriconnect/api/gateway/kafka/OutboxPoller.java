@@ -1,9 +1,12 @@
 package com.agriconnect.api.gateway.kafka;
 
 import com.agriconnect.notification.avro.NotificationEvent;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.io.DatumReader;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.JsonDecoder;
+import org.apache.avro.specific.SpecificDatumReader;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -15,13 +18,12 @@ import java.util.List;
 
 /**
  * Polls the notification_outbox table every 5 seconds and publishes PENDING
- * entries
- * to their Kafka topics. This ensures at-least-once delivery even if Kafka was
- * unavailable when the original business transaction committed.
+ * entries to their Kafka topics. This ensures at-least-once delivery even if
+ * Kafka was unavailable when the original business transaction committed.
  *
  * The poll is transactional: entries are marked SENT only after a successful
- * publish.
- * Entries that fail 5 times are marked FAILED and excluded from future polling.
+ * publish. Entries that fail 5 times are marked FAILED and excluded from
+ * future polling.
  */
 @Component
 @Slf4j
@@ -33,7 +35,22 @@ public class OutboxPoller {
 
     private final NotificationOutboxRepository outboxRepository;
     private final KafkaTemplate<String, NotificationEvent> kafkaTemplate;
-    private final ObjectMapper objectMapper;
+
+    /**
+     * Deserialize a NotificationEvent from Avro JSON using Avro's own DecoderFactory.
+     * Must match the serialization in {@link KafkaNotificationEventPublisher#toAvroJson}.
+     * Jackson cannot be used here — Avro-generated classes embed {@code org.apache.avro.Schema}
+     * objects that Jackson cannot round-trip correctly.
+     */
+    private static NotificationEvent fromAvroJson(String json) {
+        try {
+            DatumReader<NotificationEvent> reader = new SpecificDatumReader<>(NotificationEvent.SCHEMA$);
+            JsonDecoder decoder = DecoderFactory.get().jsonDecoder(NotificationEvent.SCHEMA$, json);
+            return reader.read(null, decoder);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to deserialize NotificationEvent from Avro JSON", e);
+        }
+    }
 
     @Scheduled(fixedDelay = 5000)
     @Transactional
@@ -47,7 +64,8 @@ public class OutboxPoller {
 
         for (NotificationOutboxEntry entry : pending) {
             try {
-                NotificationEvent event = objectMapper.readValue(entry.getPayload(), NotificationEvent.class);
+                // Use Avro JSON deserialization — must match toAvroJson() in the publisher
+                NotificationEvent event = fromAvroJson(entry.getPayload());
                 kafkaTemplate.executeInTransaction(ops -> ops.send(entry.getTopic(), entry.getPartitionKey(), event));
                 entry.setStatus(NotificationOutboxEntry.OutboxStatus.SENT);
                 entry.setLastAttemptAt(Instant.now());
@@ -67,3 +85,4 @@ public class OutboxPoller {
         }
     }
 }
+
