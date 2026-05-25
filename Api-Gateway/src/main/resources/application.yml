@@ -8,7 +8,7 @@ spring:
   # ── Virtual Threads (Week 1) ──────────────────────────────────────────────
   threads:
     virtual:
-      enabled: true
+      enabled: ${SPRING_THREADS_VIRTUAL_ENABLED:true}
   lifecycle:
     timeout-per-shutdown-phase: 30s
   cache:

@@ -7,7 +7,7 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:dev}
   threads:
     virtual:
-      enabled: true
+      enabled: ${SPRING_THREADS_VIRTUAL_ENABLED:true}
   lifecycle:
     timeout-per-shutdown-phase: 30s
   cache:
