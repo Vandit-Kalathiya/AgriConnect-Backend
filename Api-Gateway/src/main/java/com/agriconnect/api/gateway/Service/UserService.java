@@ -2,7 +2,9 @@ package com.agriconnect.api.gateway.Service;
 
 import com.agriconnect.api.gateway.DTO.User.UserUpdateRequest;
 import com.agriconnect.api.gateway.Entity.User.User;
+import com.agriconnect.api.gateway.Entity.User.UserBlobData;
 import com.agriconnect.api.gateway.Repository.User.UserRepository;
+import com.agriconnect.api.gateway.Repository.User.UserBlobDataRepository;
 import com.agriconnect.api.gateway.Service.Cache.CacheService;
 import com.agriconnect.api.gateway.kafka.NotificationEventPublisher;
 import com.agriconnect.notification.avro.Priority;
@@ -35,6 +37,7 @@ public class UserService {
     private static final Duration IMAGE_TTL = Duration.ofHours(24);
 
     private final UserRepository userRepository;
+    private final UserBlobDataRepository userBlobDataRepository;
     private final NotificationEventPublisher notificationEventPublisher;
     private final CacheService cacheService;
 
@@ -42,9 +45,11 @@ public class UserService {
     private String authTopic;
 
     public UserService(UserRepository userRepository,
+            UserBlobDataRepository userBlobDataRepository,
             NotificationEventPublisher notificationEventPublisher,
             CacheService cacheService) {
         this.userRepository = userRepository;
+        this.userBlobDataRepository = userBlobDataRepository;
         this.notificationEventPublisher = notificationEventPublisher;
         this.cacheService = cacheService;
     }
@@ -69,11 +74,21 @@ public class UserService {
         // user.setPhoneNumber(userDetails.getPhoneNumber());
         user.setAddress(userUpdateRequest.getAddress());
 
+        UserBlobData blobData = userBlobDataRepository.findById(id)
+                .orElseGet(() -> UserBlobData.builder().id(id).build());
+
+        boolean blobUpdated = false;
         if (profilePicture != null && !profilePicture.isEmpty()) {
-            user.setProfilePicture(profilePicture.getBytes());
+            blobData.setProfilePicture(profilePicture.getBytes());
+            blobUpdated = true;
         }
         if (signatureImage != null && !signatureImage.isEmpty()) {
-            user.setSignature(signatureImage.getBytes());
+            blobData.setSignature(signatureImage.getBytes());
+            blobUpdated = true;
+        }
+
+        if (blobUpdated) {
+            userBlobDataRepository.save(blobData);
         }
 
         User saved = userRepository.save(user);
@@ -104,8 +119,8 @@ public class UserService {
                             "auth.profile.updated",
                             List.of("IN_APP"),
                             Map.of(
-                                    "updatedFields", String.join(", ", updatedFields),
-                                    "updatedAt", Instant.now().toString()),
+                                     "updatedFields", String.join(", ", updatedFields),
+                                     "updatedAt", Instant.now().toString()),
                             Priority.LOW,
                             "profile-" + saved.getId(),
                             saved.getEmail(),
@@ -127,10 +142,10 @@ public class UserService {
         }
 
         log.debug("Cache MISS for profile image: {}, fetching from DB", userId);
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+        byte[] profilePicture = userBlobDataRepository.findById(userId)
+                .map(UserBlobData::getProfilePicture)
+                .orElse(null);
 
-        byte[] profilePicture = user.getProfilePicture();
         if (profilePicture != null) {
             cacheService.save(cacheKey, profilePicture, IMAGE_TTL);
             log.debug("Cached profile image for userId: {}", userId);
@@ -147,10 +162,10 @@ public class UserService {
         }
 
         log.debug("Cache MISS for signature: {}, fetching from DB", userId);
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+        byte[] signature = userBlobDataRepository.findById(userId)
+                .map(UserBlobData::getSignature)
+                .orElse(null);
 
-        byte[] signature = user.getSignature();
         if (signature != null) {
             cacheService.save(cacheKey, signature, IMAGE_TTL);
             log.debug("Cached signature for userId: {}", userId);

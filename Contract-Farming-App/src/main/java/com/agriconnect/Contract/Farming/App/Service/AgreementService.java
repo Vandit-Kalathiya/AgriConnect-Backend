@@ -4,7 +4,9 @@ import com.agriconnect.Contract.Farming.App.DTO.PageRequest;
 import com.agriconnect.Contract.Farming.App.DTO.PageResponse;
 import com.agriconnect.Contract.Farming.App.DTO.ResponseData;
 import com.agriconnect.Contract.Farming.App.Entity.Agreement;
+import com.agriconnect.Contract.Farming.App.Entity.AgreementDocument;
 import com.agriconnect.Contract.Farming.App.Repository.AgreementRepository;
+import com.agriconnect.Contract.Farming.App.Repository.AgreementDocumentRepository;
 import com.agriconnect.Contract.Farming.App.exception.BadRequestException;
 import com.agriconnect.Contract.Farming.App.exception.ResourceNotFoundException;
 import com.agriconnect.Contract.Farming.App.kafka.NotificationEventPublisher;
@@ -35,6 +37,7 @@ public class AgreementService {
     private static final Logger logger = LoggerFactory.getLogger(AgreementService.class);
 
     private final AgreementRepository agreementRepository;
+    private final AgreementDocumentRepository agreementDocumentRepository;
     private final CursorUtil cursorUtil;
     private final NotificationEventPublisher notificationEventPublisher;
     private final CacheService cacheService;
@@ -47,10 +50,12 @@ public class AgreementService {
 
     @Autowired
     public AgreementService(AgreementRepository agreementRepository,
+            AgreementDocumentRepository agreementDocumentRepository,
             CursorUtil cursorUtil,
             NotificationEventPublisher notificationEventPublisher,
             CacheService cacheService) {
         this.agreementRepository = agreementRepository;
+        this.agreementDocumentRepository = agreementDocumentRepository;
         this.cursorUtil = cursorUtil;
         this.notificationEventPublisher = notificationEventPublisher;
         this.cacheService = cacheService;
@@ -68,9 +73,13 @@ public class AgreementService {
             }
 
             Agreement agreement = new Agreement(farmerAddress, buyerAddress, orderId, file.getSize(), fileName,
-                    file.getContentType(), file.getBytes(), LocalDate.now(), LocalTime.now(), "", pdfHash);
+                    file.getContentType(), LocalDate.now(), LocalTime.now(), "", pdfHash);
 
             Agreement savedAgreement = agreementRepository.save(agreement);
+
+            // Save binary payload separately
+            AgreementDocument doc = new AgreementDocument(savedAgreement.getId(), file.getBytes());
+            agreementDocumentRepository.save(doc);
 
             String downloadURl = ServletUriComponentsBuilder.fromCurrentContextPath()
                     .path("/download/")
@@ -110,6 +119,22 @@ public class AgreementService {
             logger.error("Failed to upload agreement: {}", e.getMessage(), e);
             throw new BadRequestException("Failed to upload agreement: " + e.getMessage());
         }
+    }
+
+    public byte[] getAgreementDataByPdfHash(String pdfHash) {
+        Agreement agreement = agreementRepository.findByPdfHash(pdfHash)
+                .orElseThrow(() -> new ResourceNotFoundException("Agreement", "pdfHash", pdfHash));
+        return agreementDocumentRepository.findById(agreement.getId())
+                .map(AgreementDocument::getData)
+                .orElse(null);
+    }
+
+    public byte[] getAgreementDataByTransactionHash(String transactionHash) {
+        Agreement agreement = agreementRepository.findByTransactionHash(transactionHash)
+                .orElseThrow(() -> new ResourceNotFoundException("Agreement", "transactionHash", transactionHash));
+        return agreementDocumentRepository.findById(agreement.getId())
+                .map(AgreementDocument::getData)
+                .orElse(null);
     }
 
     public Agreement getAgreementByTransactionHash(String transactionHash) {

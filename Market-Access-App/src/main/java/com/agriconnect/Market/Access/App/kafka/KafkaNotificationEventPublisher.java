@@ -2,10 +2,10 @@ package com.agriconnect.Market.Access.App.kafka;
 
 import com.agriconnect.notification.avro.NotificationEvent;
 import com.agriconnect.notification.avro.Priority;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -19,23 +19,27 @@ import java.util.UUID;
 @ConditionalOnProperty(name = "feature.kafka.enabled", havingValue = "true")
 public class KafkaNotificationEventPublisher implements NotificationEventPublisher {
 
-    private final KafkaTemplate<String, NotificationEvent> kafkaTemplate;
+    private final NotificationOutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
     @Override
     public void publish(String topic, NotificationEvent event) {
-        kafkaTemplate.executeInTransaction(ops ->
-            ops.send(topic, event.getUserId(), event)
-               .whenComplete((result, ex) -> {
-                   if (ex != null) {
-                       log.error("[KAFKA] Publish failed eventId={} topic={}", event.getEventId(), topic, ex);
-                   } else {
-                       log.info("[KAFKA] Published eventId={} partition={} offset={}",
-                                event.getEventId(),
-                                result.getRecordMetadata().partition(),
-                                result.getRecordMetadata().offset());
-                   }
-               })
-        );
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            NotificationOutboxEntry entry = NotificationOutboxEntry.builder()
+                    .eventId(event.getEventId())
+                    .topic(topic)
+                    .partitionKey(event.getUserId() != null ? event.getUserId() : UUID.randomUUID().toString())
+                    .payload(payload)
+                    .status(NotificationOutboxEntry.OutboxStatus.PENDING)
+                    .retryCount(0)
+                    .build();
+            outboxRepository.save(entry);
+            log.info("[OUTBOX] Saved outbox entry eventId={} for topic={}", event.getEventId(), topic);
+        } catch (Exception e) {
+            log.error("[OUTBOX] Failed to write eventId={} to outbox", event.getEventId(), e);
+            throw new RuntimeException("Failed to write notification to outbox", e);
+        }
     }
 
     @Override

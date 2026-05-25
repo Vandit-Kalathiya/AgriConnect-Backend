@@ -1,6 +1,7 @@
 package com.agriconnect.Market.Access.App.Repository;
 
 import com.agriconnect.Market.Access.App.Entity.Listing;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
@@ -8,6 +9,8 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import jakarta.persistence.QueryHint;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,4 +41,34 @@ public interface ListingRepository extends JpaRepository<Listing, String> {
     // Native query for farmer listing count
     @Query(value = "SELECT COUNT(*) FROM listings WHERE contact_of_farmer = :contact", nativeQuery = true)
     long countByFarmer(@Param("contact") String contact);
+
+    // ==================== CURSOR-BASED PAGINATION ====================
+
+    @Query("SELECT l FROM Listing l WHERE l.status = 'ACTIVE' AND (" +
+           "(l.createdDate < :cursorDate) OR " +
+           "(l.createdDate = :cursorDate AND l.createdTime < :cursorTime) OR " +
+           "(l.createdDate = :cursorDate AND l.createdTime = :cursorTime AND l.id < :cursorId)) " +
+           "ORDER BY l.createdDate DESC, l.createdTime DESC, l.id DESC")
+    List<Listing> findActiveListingsAfterCursorDesc(
+            @Param("cursorDate") LocalDate cursorDate,
+            @Param("cursorTime") LocalTime cursorTime,
+            @Param("cursorId") String cursorId,
+            Pageable pageable);
+
+    @Query("SELECT l FROM Listing l WHERE l.status = 'ACTIVE' ORDER BY l.createdDate DESC, l.createdTime DESC, l.id DESC")
+    List<Listing> findActiveListingsFirstPageDesc(Pageable pageable);
+
+    @Query("SELECT l FROM Listing l WHERE " +
+           "(l.createdDate < :cursorDate) OR " +
+           "(l.createdDate = :cursorDate AND l.createdTime < :cursorTime) OR " +
+           "(l.createdDate = :cursorDate AND l.createdTime = :cursorTime AND l.id < :cursorId) " +
+           "ORDER BY l.createdDate DESC, l.createdTime DESC, l.id DESC")
+    List<Listing> findAllListingsAfterCursorDesc(
+            @Param("cursorDate") LocalDate cursorDate,
+            @Param("cursorTime") LocalTime cursorTime,
+            @Param("cursorId") String cursorId,
+            Pageable pageable);
+
+    @Query("SELECT l FROM Listing l ORDER BY l.createdDate DESC, l.createdTime DESC, l.id DESC")
+    List<Listing> findAllListingsFirstPageDesc(Pageable pageable);
 }

@@ -46,13 +46,7 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private boolean enabled = false;
 
-    @Column(columnDefinition = "bytea")
-    @JsonIgnore
-    private byte[] profilePicture;
 
-    @Column(columnDefinition = "bytea")
-    @JsonIgnore
-    private byte[] signature;
 
     @Column(name = "email_verified", nullable = false)
     private boolean emailVerified = false;

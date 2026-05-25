@@ -181,6 +181,7 @@ management:
     distribution:
       percentiles-histogram:
         notification.dispatch.duration: true
+        http.server.requests: true
 
 logging:
   level:

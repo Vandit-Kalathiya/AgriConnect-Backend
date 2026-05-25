@@ -27,67 +27,8 @@
         "y": 0
       },
       "id": 100,
-      "title": "System Overview & Alerts",
+      "title": "System Performance Overview",
       "type": "row"
-    },
-    {
-      "datasource": "Prometheus",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 1
-      },
-      "id": 10,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "text": {},
-        "textMode": "value"
-      },
-      "pluginVersion": "9.0.0",
-      "targets": [
-        {
-          "expr": "count(ALERTS{alertname=~\".*Memory.*\",alertstate=\"firing\"}) OR on() vector(0)",
-          "instant": true,
-          "legendFormat": "Firing Alerts",
-          "refId": "A"
-        }
-      ],
-      "title": "Firing Memory Alerts",
-      "type": "stat"
     },
     {
       "datasource": "Prometheus",
@@ -96,32 +37,20 @@
           "color": {
             "mode": "palette-classic"
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "decbytes"
-        },
-        "overrides": []
+          "unit": "reqps"
+        }
       },
       "gridPos": {
         "h": 4,
-        "w": 9,
-        "x": 6,
+        "w": 8,
+        "x": 0,
         "y": 1
       },
-      "id": 11,
+      "id": 1,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "center",
-        "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -132,16 +61,14 @@
         "text": {},
         "textMode": "value"
       },
-      "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "sum(container_memory_usage_bytes{name=~\"agriconnect-.*\"})",
-          "instant": true,
-          "legendFormat": "Total Memory Used",
+          "expr": "sum(rate(http_server_requests_seconds_count[1m]))",
+          "legendFormat": "Requests/sec",
           "refId": "A"
         }
       ],
-      "title": "Total Containers Memory Usage",
+      "title": "Total Request Rate (All Services)",
       "type": "stat"
     },
     {
@@ -151,9 +78,6 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -163,30 +87,28 @@
               },
               {
                 "color": "yellow",
-                "value": 75
+                "value": 300
               },
               {
                 "color": "red",
-                "value": 90
+                "value": 1000
               }
             ]
           },
-          "unit": "percent"
-        },
-        "overrides": []
+          "unit": "ms"
+        }
       },
       "gridPos": {
         "h": 4,
-        "w": 9,
-        "x": 15,
+        "w": 8,
+        "x": 8,
         "y": 1
       },
-      "id": 12,
+      "id": 2,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "center",
-        "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -197,16 +119,72 @@
         "text": {},
         "textMode": "value"
       },
-      "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "avg((container_memory_usage_bytes{name=~\"agriconnect-.*\"} / container_spec_memory_limit_bytes{name=~\"agriconnect-.*\"}) * 100)",
-          "instant": true,
-          "legendFormat": "Average Memory %",
+          "expr": "(sum(rate(http_server_requests_seconds_sum[1m])) / sum(rate(http_server_requests_seconds_count[1m]))) * 1000",
+          "legendFormat": "Average Latency",
           "refId": "A"
         }
       ],
-      "title": "Average Memory Utilization",
+      "title": "System-wide Average Latency",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 95
+              },
+              {
+                "color": "green",
+                "value": 99
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "(sum(rate(http_server_requests_seconds_count{status!~\"5..\"}[1m])) OR sum(rate(http_server_requests_seconds_count[1m]))) / sum(rate(http_server_requests_seconds_count[1m])) * 100",
+          "legendFormat": "Success Rate",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP Success Rate (Non-5xx)",
       "type": "stat"
     },
     {
@@ -218,7 +196,7 @@
         "y": 5
       },
       "id": 101,
-      "title": "Container Memory Usage Details",
+      "title": "Service-Level Average Latencies",
       "type": "row"
     },
     {
@@ -226,37 +204,10 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 15,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "line"
-            }
-          },
-          "mappings": [],
+          "max": 1500,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -266,219 +217,26 @@
               },
               {
                 "color": "yellow",
-                "value": 80
+                "value": 150
+              },
+              {
+                "color": "orange",
+                "value": 400
               },
               {
                 "color": "red",
-                "value": 90
+                "value": 1000
               }
             ]
           },
-          "unit": "percent"
-        },
-        "overrides": []
+          "unit": "ms"
+        }
       },
       "gridPos": {
-        "h": 9,
-        "w": 24,
+        "h": 6,
+        "w": 4,
         "x": 0,
         "y": 6
-      },
-      "id": 1,
-      "options": {
-        "legend": {
-          "calcs": [
-            "last",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "right"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "pluginVersion": "9.0.0",
-      "targets": [
-        {
-          "expr": "(container_memory_usage_bytes{name=~\"agriconnect-.*\"} / container_spec_memory_limit_bytes{name=~\"agriconnect-.*\"}) * 100",
-          "legendFormat": "{{name}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Container Memory Usage (% of Limit) Over Time",
-      "type": "timeseries"
-    },
-    {
-      "datasource": "Prometheus",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 70
-              },
-              {
-                "color": "orange",
-                "value": 80
-              },
-              {
-                "color": "red",
-                "value": 90
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 0,
-        "y": 15
-      },
-      "id": 2,
-      "options": {
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "text": {}
-      },
-      "pluginVersion": "9.0.0",
-      "targets": [
-        {
-          "expr": "(container_memory_usage_bytes{name=\"agriconnect-api-gateway\"} / container_spec_memory_limit_bytes{name=\"agriconnect-api-gateway\"}) * 100",
-          "refId": "A"
-        }
-      ],
-      "title": "API Gateway Memory",
-      "type": "gauge"
-    },
-    {
-      "datasource": "Prometheus",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 70
-              },
-              {
-                "color": "orange",
-                "value": 80
-              },
-              {
-                "color": "red",
-                "value": 90
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 4,
-        "y": 15
-      },
-      "id": 3,
-      "options": {
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "text": {}
-      },
-      "pluginVersion": "9.0.0",
-      "targets": [
-        {
-          "expr": "(container_memory_usage_bytes{name=\"agriconnect-contract-farming\"} / container_spec_memory_limit_bytes{name=\"agriconnect-contract-farming\"}) * 100",
-          "refId": "A"
-        }
-      ],
-      "title": "Contract Farming Memory",
-      "type": "gauge"
-    },
-    {
-      "datasource": "Prometheus",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 70
-              },
-              {
-                "color": "orange",
-                "value": 80
-              },
-              {
-                "color": "red",
-                "value": 90
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 8,
-        "y": 15
       },
       "id": 4,
       "options": {
@@ -494,14 +252,13 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "(container_memory_usage_bytes{name=\"agriconnect-market-access\"} / container_spec_memory_limit_bytes{name=\"agriconnect-market-access\"}) * 100",
+          "expr": "(sum(rate(http_server_requests_seconds_sum{service=\"api-gateway\"}[1m])) / sum(rate(http_server_requests_seconds_count{service=\"api-gateway\"}[1m]))) * 1000",
           "refId": "A"
         }
       ],
-      "title": "Market Access Memory",
+      "title": "API Gateway Latency",
       "type": "gauge"
     },
     {
@@ -511,8 +268,7 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
-          "max": 100,
+          "max": 1500,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -523,27 +279,26 @@
               },
               {
                 "color": "yellow",
-                "value": 70
+                "value": 150
               },
               {
                 "color": "orange",
-                "value": 80
+                "value": 400
               },
               {
                 "color": "red",
-                "value": 90
+                "value": 1000
               }
             ]
           },
-          "unit": "percent"
-        },
-        "overrides": []
+          "unit": "ms"
+        }
       },
       "gridPos": {
         "h": 6,
         "w": 4,
-        "x": 12,
-        "y": 15
+        "x": 4,
+        "y": 6
       },
       "id": 5,
       "options": {
@@ -559,14 +314,13 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "(container_memory_usage_bytes{name=\"agriconnect-generate-agreement\"} / container_spec_memory_limit_bytes{name=\"agriconnect-generate-agreement\"}) * 100",
+          "expr": "(sum(rate(http_server_requests_seconds_sum{service=\"contract-farming\"}[1m])) / sum(rate(http_server_requests_seconds_count{service=\"contract-farming\"}[1m]))) * 1000",
           "refId": "A"
         }
       ],
-      "title": "Generate Agreement Memory",
+      "title": "Contract Farming Latency",
       "type": "gauge"
     },
     {
@@ -576,8 +330,7 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
-          "max": 100,
+          "max": 1500,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -588,27 +341,26 @@
               },
               {
                 "color": "yellow",
-                "value": 70
+                "value": 150
               },
               {
                 "color": "orange",
-                "value": 80
+                "value": 400
               },
               {
                 "color": "red",
-                "value": 90
+                "value": 1000
               }
             ]
           },
-          "unit": "percent"
-        },
-        "overrides": []
+          "unit": "ms"
+        }
       },
       "gridPos": {
         "h": 6,
         "w": 4,
-        "x": 16,
-        "y": 15
+        "x": 8,
+        "y": 6
       },
       "id": 6,
       "options": {
@@ -624,14 +376,13 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "(container_memory_usage_bytes{name=\"agriconnect-notification-service\"} / container_spec_memory_limit_bytes{name=\"agriconnect-notification-service\"}) * 100",
+          "expr": "(sum(rate(http_server_requests_seconds_sum{service=\"market-access\"}[1m])) / sum(rate(http_server_requests_seconds_count{service=\"market-access\"}[1m]))) * 1000",
           "refId": "A"
         }
       ],
-      "title": "Notification Service Memory",
+      "title": "Market Access Latency",
       "type": "gauge"
     },
     {
@@ -641,8 +392,7 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
-          "max": 100,
+          "max": 1500,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -653,27 +403,26 @@
               },
               {
                 "color": "yellow",
-                "value": 70
+                "value": 150
               },
               {
                 "color": "orange",
-                "value": 80
+                "value": 400
               },
               {
                 "color": "red",
-                "value": 90
+                "value": 1000
               }
             ]
           },
-          "unit": "percent"
-        },
-        "overrides": []
+          "unit": "ms"
+        }
       },
       "gridPos": {
         "h": 6,
         "w": 4,
-        "x": 20,
-        "y": 15
+        "x": 12,
+        "y": 6
       },
       "id": 7,
       "options": {
@@ -689,14 +438,75 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "(container_memory_usage_bytes{name=\"agriconnect-kafka\"} / container_spec_memory_limit_bytes{name=\"agriconnect-kafka\"}) * 100",
+          "expr": "(sum(rate(http_server_requests_seconds_sum{service=\"generate-agreement\"}[1m])) / sum(rate(http_server_requests_seconds_count{service=\"generate-agreement\"}[1m]))) * 1000",
           "refId": "A"
         }
       ],
-      "title": "Kafka Memory",
+      "title": "Generate Agreement Latency",
+      "type": "gauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "max": 1500,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 150
+              },
+              {
+                "color": "orange",
+                "value": 400
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
+            ]
+          },
+          "unit": "ms"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 16,
+        "y": 6
+      },
+      "id": 8,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "text": {}
+      },
+      "targets": [
+        {
+          "expr": "(sum(rate(http_server_requests_seconds_sum{service=\"notification-service\"}[1m])) / sum(rate(http_server_requests_seconds_count{service=\"notification-service\"}[1m]))) * 1000",
+          "refId": "A"
+        }
+      ],
+      "title": "Notification Service Latency",
       "type": "gauge"
     },
     {
@@ -705,10 +515,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 21
+        "y": 12
       },
       "id": 102,
-      "title": "Absolute Memory & JVM Metrics",
+      "title": "Latency & Throughput Trends",
       "type": "row"
     },
     {
@@ -756,17 +566,16 @@
               }
             ]
           },
-          "unit": "decbytes"
-        },
-        "overrides": []
+          "unit": "ms"
+        }
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 22
+        "y": 13
       },
-      "id": 8,
+      "id": 9,
       "options": {
         "legend": {
           "calcs": [
@@ -780,16 +589,105 @@
           "mode": "multi"
         }
       },
-      "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "container_memory_usage_bytes{name=~\"agriconnect-.*\"}",
-          "legendFormat": "{{name}}",
+          "expr": "(sum(rate(http_server_requests_seconds_sum[1m])) by (service) / sum(rate(http_server_requests_seconds_count[1m])) by (service)) * 1000",
+          "legendFormat": "{{service}} Avg Latency",
           "refId": "A"
         }
       ],
-      "title": "Container Memory Usage (Absolute)",
+      "title": "Average Latency by Service",
       "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqpm"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": [
+            "last",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count[1m]) * 60) by (service)",
+          "legendFormat": "{{service}} Requests/min",
+          "refId": "A"
+        }
+      ],
+      "title": "Request Throughput by Service",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "id": 103,
+      "title": "Errors & Service Resilience",
+      "type": "row"
     },
     {
       "datasource": "Prometheus",
@@ -836,25 +734,24 @@
               },
               {
                 "color": "yellow",
-                "value": 80
+                "value": 1
               },
               {
                 "color": "red",
-                "value": 90
+                "value": 5
               }
             ]
           },
           "unit": "percent"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 22
       },
-      "id": 9,
+      "id": 11,
       "options": {
         "legend": {
           "calcs": [
@@ -868,15 +765,92 @@
           "mode": "multi"
         }
       },
-      "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "(jvm_memory_used_bytes{area=\"heap\"} / jvm_memory_max_bytes{area=\"heap\"}) * 100",
-          "legendFormat": "{{service}} - JVM Heap",
+          "expr": "(sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[1m])) by (service) / sum(rate(http_server_requests_seconds_count[1m])) by (service)) * 100",
+          "legendFormat": "{{service}} 5xx Rate",
           "refId": "A"
         }
       ],
-      "title": "JVM Heap Usage (% of Max)",
+      "title": "HTTP 5xx Error Rate by Service",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [
+            "last",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(resilience4j_circuitbreaker_state) by (name, state)",
+          "legendFormat": "{{name}} ({{state}})",
+          "refId": "A"
+        }
+      ],
+      "title": "Resilience4j Circuit Breaker States",
       "type": "timeseries"
     }
   ],
@@ -884,8 +858,8 @@
   "schemaVersion": 38,
   "style": "dark",
   "tags": [
-    "memory",
-    "monitoring",
+    "latency",
+    "throughput",
     "agriconnect"
   ],
   "templating": {
@@ -896,8 +870,8 @@
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "",
-  "title": "AgriConnect - Memory Monitoring",
-  "uid": "agriconnect-memory",
-  "version": 2
+  "timezone": "browser",
+  "title": "AgriConnect - Service Performance",
+  "uid": "agriconnect-services",
+  "version": 1
 }

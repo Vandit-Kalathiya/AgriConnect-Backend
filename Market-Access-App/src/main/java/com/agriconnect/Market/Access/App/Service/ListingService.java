@@ -3,14 +3,19 @@ package com.agriconnect.Market.Access.App.Service;
 import com.agriconnect.Market.Access.App.Dto.ListingRequest;
 import com.agriconnect.Market.Access.App.Dto.ListingResponse;
 import com.agriconnect.Market.Access.App.Dto.ListingListResponse;
+import com.agriconnect.Market.Access.App.Dto.PageRequest;
+import com.agriconnect.Market.Access.App.Dto.PageResponse;
 import com.agriconnect.Market.Access.App.Entity.Image;
+import com.agriconnect.Market.Access.App.Entity.ImageData;
 import com.agriconnect.Market.Access.App.Entity.Listing;
 import com.agriconnect.Market.Access.App.Entity.ListingStatus;
 import com.agriconnect.Market.Access.App.Repository.ImageRepository;
+import com.agriconnect.Market.Access.App.Repository.ImageDataRepository;
 import com.agriconnect.Market.Access.App.Repository.ListingRepository;
 import com.agriconnect.Market.Access.App.exception.BadRequestException;
 import com.agriconnect.Market.Access.App.exception.ResourceNotFoundException;
 import com.agriconnect.Market.Access.App.kafka.NotificationEventPublisher;
+import com.agriconnect.Market.Access.App.util.CursorUtil;
 import com.agriconnect.notification.avro.Priority;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,20 +56,26 @@ public class ListingService {
 
     private final ListingRepository listingRepository;
     private final ImageRepository imageRepository;
+    private final ImageDataRepository imageDataRepository;
     private final NotificationEventPublisher notificationEventPublisher;
     private final CacheService cacheService;
+    private final CursorUtil cursorUtil;
 
     @Value("${notification.topics.market}")
     private String marketTopic;
 
     public ListingService(ListingRepository listingRepository,
             ImageRepository imageRepository,
+            ImageDataRepository imageDataRepository,
             NotificationEventPublisher notificationEventPublisher,
-            CacheService cacheService) {
+            CacheService cacheService,
+            CursorUtil cursorUtil) {
         this.listingRepository = listingRepository;
         this.imageRepository = imageRepository;
+        this.imageDataRepository = imageDataRepository;
         this.notificationEventPublisher = notificationEventPublisher;
         this.cacheService = cacheService;
+        this.cursorUtil = cursorUtil;
     }
 
     @Transactional
@@ -85,14 +96,14 @@ public class ListingService {
 
             // Set AI generated price (default to 0L)
             listing.setAiGeneratedPrice(listingRequest.getAiGeneratedPrice() != null
-                    ? Double.parseDouble(listingRequest.getAiGeneratedPrice())
-                    : 0L);
+                     ? Double.parseDouble(listingRequest.getAiGeneratedPrice())
+                     : 0L);
 
             // Convert date strings to LocalDate with custom formatter
             listing.setHarvestedDate(
                     listingRequest.getHarvestedDate() != null && !listingRequest.getHarvestedDate().isEmpty()
-                            ? LocalDate.parse(listingRequest.getHarvestedDate(), DATE_FORMATTER)
-                            : null);
+                             ? LocalDate.parse(listingRequest.getHarvestedDate(), DATE_FORMATTER)
+                             : null);
 
             listing.setStorageCondition(listingRequest.getStorageCondition());
 
@@ -106,7 +117,7 @@ public class ListingService {
             // Convert and validate shelfLifetime
             listing.setShelfLifetime(
                     listingRequest.getShelfLifetime() != null ? Long.parseLong(listingRequest.getShelfLifetime())
-                            : null);
+                             : null);
 
             listing.setContactOfFarmer(listingRequest.getContactOfFarmer());
 
@@ -124,14 +135,20 @@ public class ListingService {
                                 .fileName(file.getOriginalFilename())
                                 .fileType(file.getContentType())
                                 .size(file.getSize())
-                                .data(file.getBytes())
                                 .createDate(LocalDate.now())
                                 .createTime(LocalTime.now())
                                 .listing(listing)
                                 .build();
 
-                        imageRepository.save(image);
-                        listing.getImages().add(image);
+                        Image savedImage = imageRepository.save(image);
+                        
+                        ImageData imageData = ImageData.builder()
+                                .id(savedImage.getId())
+                                .data(file.getBytes())
+                                .build();
+                        imageDataRepository.save(imageData);
+                        
+                        listing.getImages().add(savedImage);
                     }
                 }
             }
@@ -145,27 +162,29 @@ public class ListingService {
 
             cacheService.evict(ALL_LISTINGS_KEY);
             cacheService.evict(ACTIVE_LISTINGS_KEY);
+            cacheService.evictPattern("listings:active:page:*");
+            cacheService.evictPattern("listings:all:page:*");
             cacheService.evict("listings:farmer:" + listing.getContactOfFarmer());
 
             try {
                 notificationEventPublisher.publish(marketTopic,
                         notificationEventPublisher.buildEvent(
-                                "MARKET_LISTING_CREATED",
-                                listing.getContactOfFarmer(),
-                                "market.listing.created",
-                                List.of("IN_APP", "EMAIL"),
-                                Map.of(
-                                        "listingId", listing.getId(),
-                                        "cropName", listing.getProductName(),
-                                        "quantity",
-                                        listing.getQuantity() + " "
-                                                + (listing.getUnitOfQuantity() != null ? listing.getUnitOfQuantity()
-                                                        : ""),
-                                        "listingDate", Instant.now().toString()),
-                                Priority.NORMAL,
-                                listing.getId(),
-                                null,
-                                listing.getContactOfFarmer()));
+                                 "MARKET_LISTING_CREATED",
+                                 listing.getContactOfFarmer(),
+                                 "market.listing.created",
+                                 List.of("IN_APP", "EMAIL"),
+                                 Map.of(
+                                         "listingId", listing.getId(),
+                                         "cropName", listing.getProductName(),
+                                         "quantity",
+                                         listing.getQuantity() + " "
+                                                 + (listing.getUnitOfQuantity() != null ? listing.getUnitOfQuantity()
+                                                         : ""),
+                                         "listingDate", Instant.now().toString()),
+                                 Priority.NORMAL,
+                                 listing.getId(),
+                                 null,
+                                 listing.getContactOfFarmer()));
             } catch (Exception ex) {
                 log.warn("[NOTIFY] Failed to publish MARKET_LISTING_CREATED for listing={}: {}", listing.getId(),
                         ex.getMessage());
@@ -240,13 +259,19 @@ public class ListingService {
                                 .fileName(file.getOriginalFilename())
                                 .fileType(file.getContentType())
                                 .size(file.getSize())
-                                .data(file.getBytes())
                                 .createDate(LocalDate.now())
                                 .createTime(LocalTime.now())
                                 .listing(existingListing)
                                 .build();
-                        imageRepository.save(image);
-                        existingListing.getImages().add(image);
+                        Image savedImage = imageRepository.save(image);
+                        
+                        ImageData imageData = ImageData.builder()
+                                .id(savedImage.getId())
+                                .data(file.getBytes())
+                                .build();
+                        imageDataRepository.save(imageData);
+                        
+                        existingListing.getImages().add(savedImage);
                     }
                 }
             }
@@ -255,6 +280,8 @@ public class ListingService {
             cacheService.evict("listing:" + listingId);
             cacheService.evict(ALL_LISTINGS_KEY);
             cacheService.evict(ACTIVE_LISTINGS_KEY);
+            cacheService.evictPattern("listings:active:page:*");
+            cacheService.evictPattern("listings:all:page:*");
             cacheService.evict("listings:farmer:" + updated.getContactOfFarmer());
             cacheService.evict(LISTING_IMAGES_PREFIX + listingId);
             // Evict individual image caches
@@ -294,7 +321,7 @@ public class ListingService {
                         .fileType(image.getFileType())
                         .size(image.getSize())
                         .downloadUrl(image.getDownloadUrl())
-                        .data(image.getData())
+                        .data(null) // Exclude raw binary bytes in listing responses
                         .createDate(image.getCreateDate())
                         .createTime(image.getCreateTime())
                         .build())
@@ -377,11 +404,17 @@ public class ListingService {
             // Cache individual images too
             String imageCacheKey = IMAGE_DATA_PREFIX + image.getId();
             byte[] imageData = cacheService.get(imageCacheKey, byte[].class).orElseGet(() -> {
-                byte[] data = image.getData();
-                cacheService.save(imageCacheKey, data, IMAGE_TTL);
+                byte[] data = imageDataRepository.findById(image.getId())
+                        .map(ImageData::getData)
+                        .orElse(null);
+                if (data != null) {
+                    cacheService.save(imageCacheKey, data, IMAGE_TTL);
+                }
                 return data;
             });
-            images.add(imageData);
+            if (imageData != null) {
+                images.add(imageData);
+            }
         }
 
         // Cache the complete list
@@ -410,6 +443,9 @@ public class ListingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Listing", "id", listingId));
 
         if (!listing.getImages().isEmpty()) {
+            for (Image img : listing.getImages()) {
+                imageDataRepository.deleteById(img.getId());
+            }
             imageRepository.deleteAll(listing.getImages());
         }
 
@@ -417,6 +453,8 @@ public class ListingService {
         cacheService.evict("listing:" + listingId);
         cacheService.evict(ALL_LISTINGS_KEY);
         cacheService.evict(ACTIVE_LISTINGS_KEY);
+        cacheService.evictPattern("listings:active:page:*");
+        cacheService.evictPattern("listings:all:page:*");
         cacheService.evict("listings:farmer:" + listing.getContactOfFarmer());
         cacheService.evict(LISTING_IMAGES_PREFIX + listingId);
         // Evict individual image caches
@@ -427,17 +465,17 @@ public class ListingService {
         try {
             notificationEventPublisher.publish(marketTopic,
                     notificationEventPublisher.buildEvent(
-                            "MARKET_LISTING_DELETED",
-                            listing.getContactOfFarmer(),
-                            "market.listing.deleted",
-                            List.of("IN_APP"),
-                            Map.of(
-                                    "listingId", listingId,
-                                    "cropName", listing.getProductName()),
-                            Priority.LOW,
-                            listingId,
-                            null,
-                            listing.getContactOfFarmer()));
+                             "MARKET_LISTING_DELETED",
+                             listing.getContactOfFarmer(),
+                             "market.listing.deleted",
+                             List.of("IN_APP"),
+                             Map.of(
+                                     "listingId", listingId,
+                                     "cropName", listing.getProductName()),
+                             Priority.LOW,
+                             listingId,
+                             null,
+                             listing.getContactOfFarmer()));
         } catch (Exception ex) {
             log.warn("[NOTIFY] Failed to publish MARKET_LISTING_DELETED for listing={}: {}", listingId,
                     ex.getMessage());
@@ -470,6 +508,8 @@ public class ListingService {
         cacheService.evict("listing:" + listingId);
         cacheService.evict(ALL_LISTINGS_KEY);
         cacheService.evict(ACTIVE_LISTINGS_KEY);
+        cacheService.evictPattern("listings:active:page:*");
+        cacheService.evictPattern("listings:all:page:*");
         cacheService.evict("listings:farmer:" + updated.getContactOfFarmer());
         cacheService.evict(LISTING_IMAGES_PREFIX + listingId);
         log.info("Listing status updated successfully for ID: {}", listingId);
@@ -482,19 +522,19 @@ public class ListingService {
 
             notificationEventPublisher.publish(marketTopic,
                     notificationEventPublisher.buildEvent(
-                            eventType,
-                            updated.getContactOfFarmer(),
-                            templateId,
-                            isSold ? List.of("EMAIL", "IN_APP") : List.of("IN_APP"),
-                            Map.of(
-                                    "listingId", updated.getId(),
-                                    "cropName", updated.getProductName(),
-                                    "purchasedQty", String.valueOf(quantityValue),
-                                    "remainingQty", String.valueOf(updated.getQuantity())),
-                            priority,
-                            listingId,
-                            null,
-                            updated.getContactOfFarmer()));
+                             eventType,
+                             updated.getContactOfFarmer(),
+                             templateId,
+                             isSold ? List.of("EMAIL", "IN_APP") : List.of("IN_APP"),
+                             Map.of(
+                                     "listingId", updated.getId(),
+                                     "cropName", updated.getProductName(),
+                                     "purchasedQty", String.valueOf(quantityValue),
+                                     "remainingQty", String.valueOf(updated.getQuantity())),
+                             priority,
+                             listingId,
+                             null,
+                             updated.getContactOfFarmer()));
         } catch (Exception ex) {
             log.warn("[NOTIFY] Failed to publish listing status event for listing={}: {}", listingId, ex.getMessage());
         }
@@ -528,5 +568,141 @@ public class ListingService {
             cacheService.save(cacheKey, response, FARMER_LIST_TTL);
             return response;
         });
+    }
+
+    // ==================== CURSOR-BASED PAGINATION ====================
+
+    @Transactional(readOnly = true)
+    public PageResponse<ListingResponse> getActiveListingsPaginated(PageRequest pageRequest) {
+        log.debug("Fetching active listings paginated");
+        String cacheKey = "listings:active:page:" + (pageRequest.getCursor() != null ? pageRequest.getCursor() : "first") + ":" + pageRequest.getLimit();
+        return cacheService.get(cacheKey, PageResponse.class).orElseGet(() -> {
+            PageResponse<ListingResponse> response = getActiveListingsPaginatedFromDb(pageRequest);
+            cacheService.save(cacheKey, response, ACTIVE_LIST_TTL);
+            return response;
+        });
+    }
+
+    private PageResponse<ListingResponse> getActiveListingsPaginatedFromDb(PageRequest pageRequest) {
+        List<Listing> listings;
+        int limit = pageRequest.getLimit();
+        org.springframework.data.domain.PageRequest springPageRequest = org.springframework.data.domain.PageRequest.of(0, limit + 1);
+
+        if (pageRequest.getCursor() == null) {
+            listings = listingRepository.findActiveListingsFirstPageDesc(springPageRequest);
+        } else {
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(pageRequest.getCursor());
+            listings = listingRepository.findActiveListingsAfterCursorDesc(
+                    cursorData.getDate(), cursorData.getTime(), cursorData.getId(), springPageRequest);
+        }
+
+        return buildListingPageResponse(listings, limit, pageRequest);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<ListingListResponse> getAllListingsPaginated(PageRequest pageRequest) {
+        log.debug("Fetching all listings paginated");
+        String cacheKey = "listings:all:page:" + (pageRequest.getCursor() != null ? pageRequest.getCursor() : "first") + ":" + pageRequest.getLimit();
+        return cacheService.get(cacheKey, PageResponse.class).orElseGet(() -> {
+            PageResponse<ListingListResponse> response = getAllListingsPaginatedFromDb(pageRequest);
+            cacheService.save(cacheKey, response, LIST_TTL);
+            return response;
+        });
+    }
+
+    private PageResponse<ListingListResponse> getAllListingsPaginatedFromDb(PageRequest pageRequest) {
+        List<Listing> listings;
+        int limit = pageRequest.getLimit();
+        org.springframework.data.domain.PageRequest springPageRequest = org.springframework.data.domain.PageRequest.of(0, limit + 1);
+
+        if (pageRequest.getCursor() == null) {
+            listings = listingRepository.findAllListingsFirstPageDesc(springPageRequest);
+        } else {
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(pageRequest.getCursor());
+            listings = listingRepository.findAllListingsAfterCursorDesc(
+                    cursorData.getDate(), cursorData.getTime(), cursorData.getId(), springPageRequest);
+        }
+
+        return buildListingListPageResponse(listings, limit, pageRequest);
+    }
+
+    private PageResponse<ListingResponse> buildListingPageResponse(List<Listing> listings, int limit, PageRequest pageRequest) {
+        boolean hasNext = listings.size() > limit;
+        if (hasNext) {
+            listings = listings.subList(0, limit);
+        }
+
+        String nextCursor = null;
+        String prevCursor = null;
+
+        if (!listings.isEmpty()) {
+            if (hasNext) {
+                Listing lastListing = listings.get(listings.size() - 1);
+                nextCursor = cursorUtil.encodeCursor(
+                        lastListing.getCreatedDate(),
+                        lastListing.getCreatedTime(),
+                        lastListing.getId()
+                );
+            }
+            Listing firstListing = listings.get(0);
+            prevCursor = cursorUtil.encodeCursor(
+                    firstListing.getCreatedDate(),
+                    firstListing.getCreatedTime(),
+                    firstListing.getId()
+            );
+        }
+
+        List<ListingResponse> data = listings.stream().map(this::convertToListingResponse).toList();
+
+        PageResponse.PageMetadata metadata = PageResponse.PageMetadata.builder()
+                .nextCursor(nextCursor)
+                .prevCursor(prevCursor)
+                .hasNext(hasNext)
+                .hasPrev(pageRequest.getCursor() != null)
+                .pageSize(limit)
+                .returnedCount(data.size())
+                .build();
+
+        return PageResponse.<ListingResponse>builder().data(data).metadata(metadata).build();
+    }
+
+    private PageResponse<ListingListResponse> buildListingListPageResponse(List<Listing> listings, int limit, PageRequest pageRequest) {
+        boolean hasNext = listings.size() > limit;
+        if (hasNext) {
+            listings = listings.subList(0, limit);
+        }
+
+        String nextCursor = null;
+        String prevCursor = null;
+
+        if (!listings.isEmpty()) {
+            if (hasNext) {
+                Listing lastListing = listings.get(listings.size() - 1);
+                nextCursor = cursorUtil.encodeCursor(
+                        lastListing.getCreatedDate(),
+                        lastListing.getCreatedTime(),
+                        lastListing.getId()
+                );
+            }
+            Listing firstListing = listings.get(0);
+            prevCursor = cursorUtil.encodeCursor(
+                    firstListing.getCreatedDate(),
+                    firstListing.getCreatedTime(),
+                    firstListing.getId()
+            );
+        }
+
+        List<ListingListResponse> data = listings.stream().map(this::convertToListingListResponse).toList();
+
+        PageResponse.PageMetadata metadata = PageResponse.PageMetadata.builder()
+                .nextCursor(nextCursor)
+                .prevCursor(prevCursor)
+                .hasNext(hasNext)
+                .hasPrev(pageRequest.getCursor() != null)
+                .pageSize(limit)
+                .returnedCount(data.size())
+                .build();
+
+        return PageResponse.<ListingListResponse>builder().data(data).metadata(metadata).build();
     }
 }

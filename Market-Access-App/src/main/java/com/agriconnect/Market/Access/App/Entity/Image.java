@@ -32,9 +32,7 @@ public class Image {
     @JsonBackReference
     private Listing listing;
 
-    @Column(columnDefinition = "bytea")
-    @JsonIgnore
-    private byte[] data;
+
 
     private LocalDate createDate;
 

@@ -3,6 +3,8 @@ package com.agriconnect.Market.Access.App.Controller;
 import com.agriconnect.Market.Access.App.Dto.ListingRequest;
 import com.agriconnect.Market.Access.App.Dto.ListingResponse;
 import com.agriconnect.Market.Access.App.Dto.ListingListResponse;
+import com.agriconnect.Market.Access.App.Dto.PageRequest;
+import com.agriconnect.Market.Access.App.Dto.PageResponse;
 import com.agriconnect.Market.Access.App.Service.ListingService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,10 +68,27 @@ public class ListingController {
         return ResponseEntity.ok().body(listingService.getListingImages(listingId));
     }
 
+    @Deprecated
     @GetMapping("/all")
     public ResponseEntity<?> getAllListings() {
         try {
             List<ListingListResponse> listings = listingService.getAllListings();
+            return ResponseEntity.ok(listings);
+        } catch (Exception e) {
+            return new ResponseEntity<>("Unexpected error: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @GetMapping("/paginated")
+    public ResponseEntity<?> getAllListingsPaginated(
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit) {
+        try {
+            PageRequest pageRequest = PageRequest.builder()
+                    .cursor(cursor)
+                    .limit(limit)
+                    .build();
+            PageResponse<ListingListResponse> listings = listingService.getAllListingsPaginated(pageRequest);
             return ResponseEntity.ok(listings);
         } catch (Exception e) {
             return new ResponseEntity<>("Unexpected error: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -99,10 +118,27 @@ public class ListingController {
         }
     }
 
+    @Deprecated
     @GetMapping("/all/active")
     public ResponseEntity<?> getAllActiveListings() {
         try {
             List<ListingResponse> activeListings = listingService.getActiveListings();
+            return ResponseEntity.ok(activeListings);
+        } catch (Exception e) {
+            return new ResponseEntity<>("Unexpected error: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @GetMapping("/active/paginated")
+    public ResponseEntity<?> getActiveListingsPaginated(
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit) {
+        try {
+            PageRequest pageRequest = PageRequest.builder()
+                    .cursor(cursor)
+                    .limit(limit)
+                    .build();
+            PageResponse<ListingResponse> activeListings = listingService.getActiveListingsPaginated(pageRequest);
             return ResponseEntity.ok(activeListings);
         } catch (Exception e) {
             return new ResponseEntity<>("Unexpected error: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);

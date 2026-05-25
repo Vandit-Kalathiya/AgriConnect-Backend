@@ -35,15 +35,11 @@ public class Agreement {
     private String transactionHash = "";
     private String pdfHash;
 
-    @Lob
-    private byte[] data;
-
     public Agreement(String farmerAddress, String buyerAddress, String orderId, Long size, String fileName,
-            String fileType, byte[] data, LocalDate createDate, LocalTime createTime, String transactionHash,
+            String fileType, LocalDate createDate, LocalTime createTime, String transactionHash,
             String pdfHash) {
         this.fileName = fileName;
         this.fileType = fileType;
-        this.data = data;
         this.createDate = createDate;
         this.createTime = createTime;
         this.size = size;

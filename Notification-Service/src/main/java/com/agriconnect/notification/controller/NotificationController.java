@@ -86,11 +86,17 @@ public class NotificationController {
     @PatchMapping("/{id}/read")
     @Transactional
     public ResponseEntity<Map<String, Object>> markAsRead(@PathVariable UUID id) {
+        Notification notification = notificationRepository.findById(id).orElse(null);
+        if (notification == null) {
+            return ResponseEntity.notFound().build();
+        }
         int updated = notificationRepository.markAsReadById(id);
         if (updated == 0) {
             return ResponseEntity.notFound().build();
         }
-        cacheService.evictPattern("notifications:*");
+        String userId = notification.getUserId();
+        cacheService.evictPattern("notifications:" + userId + ":*");
+        cacheService.evict("notifications:unread:" + userId);
         Map<String, Object> response = new HashMap<>();
         response.put("id", id);
         response.put("read", true);

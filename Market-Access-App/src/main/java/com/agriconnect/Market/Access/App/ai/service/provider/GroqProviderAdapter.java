@@ -6,30 +6,38 @@ import com.groq.sdk.models.GroqResponse;
 import com.groq.sdk.models.chat.ChatCompletion;
 import com.groq.sdk.models.chat.ChatCompletionRequest;
 import com.groq.sdk.models.chat.ChatMessage;
-import lombok.RequiredArgsConstructor;
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
-
 import java.time.Duration;
 import java.util.List;
 
 @Component
-@RequiredArgsConstructor
 public class GroqProviderAdapter implements LlmProviderAdapter {
 
     private final AiProperties aiProperties;
+    private GroqClient client;
+
+    public GroqProviderAdapter(AiProperties aiProperties) {
+        this.aiProperties = aiProperties;
+    }
+
+    @PostConstruct
+    public void init() {
+        if (aiProperties.isEnabled() && aiProperties.getApiKey() != null && !aiProperties.getApiKey().isBlank()) {
+            this.client = GroqClient.builder()
+                    .apiKey(aiProperties.getApiKey())
+                    .baseUrl(aiProperties.getBaseUrl())
+                    .timeout(Duration.ofMillis(aiProperties.getTimeoutMs()))
+                    .maxRetries(aiProperties.getRetries())
+                    .build();
+        }
+    }
 
     @Override
     public String generate(String prompt) {
-        if (!aiProperties.isEnabled() || aiProperties.getApiKey() == null || aiProperties.getApiKey().isBlank()) {
+        if (client == null) {
             return "AI service is operating in fallback mode right now. Please try again shortly.";
         }
-
-        GroqClient client = GroqClient.builder()
-                .apiKey(aiProperties.getApiKey())
-                .baseUrl(aiProperties.getBaseUrl())
-                .timeout(Duration.ofMillis(aiProperties.getTimeoutMs()))
-                .maxRetries(aiProperties.getRetries())
-                .build();
 
         ChatMessage message = new ChatMessage("user", prompt);
         ChatCompletionRequest request = new ChatCompletionRequest(aiProperties.getModel(), List.of(message));

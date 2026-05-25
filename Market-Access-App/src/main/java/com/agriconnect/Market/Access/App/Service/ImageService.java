@@ -1,8 +1,10 @@
 package com.agriconnect.Market.Access.App.Service;
 
 import com.agriconnect.Market.Access.App.Entity.Image;
+import com.agriconnect.Market.Access.App.Entity.ImageData;
 import com.agriconnect.Market.Access.App.Entity.Listing;
 import com.agriconnect.Market.Access.App.Repository.ImageRepository;
+import com.agriconnect.Market.Access.App.Repository.ImageDataRepository;
 import com.agriconnect.Market.Access.App.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,13 +13,21 @@ import org.springframework.transaction.annotation.Transactional;
 public class ImageService {
 
     private final ImageRepository imageRepository;
+    private final ImageDataRepository imageDataRepository;
 
-    public ImageService(ImageRepository imageRepository) {
+    public ImageService(ImageRepository imageRepository, ImageDataRepository imageDataRepository) {
         this.imageRepository = imageRepository;
+        this.imageDataRepository = imageDataRepository;
     }
 
     public byte[] getImageById(String id) {
-        return imageRepository.findById(id).get().getData();
+        return imageDataRepository.findById(id)
+                .map(ImageData::getData)
+                .orElse(null);
+    }
+
+    public Image getImageMetadata(String id) {
+        return imageRepository.findById(id).orElse(null);
     }
 
     @Transactional

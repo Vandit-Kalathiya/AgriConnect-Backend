@@ -77,12 +77,14 @@ public class AgreementController {
                 throw new RuntimeException("Agreement not found for given pdfHash: " + pdfHash);
             }
 
+            byte[] data = agreementService.getAgreementDataByPdfHash(pdfHash);
+
             return  ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(agreement.getFileType()))
                     .header(HttpHeaders.CONTENT_DISPOSITION,
                             "attachment; filename=\"" + agreement.getFileName()
                                     + "\"")
-                    .body(new ByteArrayResource(agreement.getData()));
+                    .body(new ByteArrayResource(data));
         } catch (Exception e) {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -97,12 +99,14 @@ public class AgreementController {
                 throw new RuntimeException("Agreement not found for given pdfHash: " + transactionHash);
             }
 
+            byte[] data = agreementService.getAgreementDataByTransactionHash(transactionHash);
+
             return  ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(agreement.getFileType()))
                     .header(HttpHeaders.CONTENT_DISPOSITION,
                             "attachment; filename=\"" + agreement.getFileName()
                                     + "\"")
-                    .body(new ByteArrayResource(agreement.getData()));
+                    .body(new ByteArrayResource(data));
         } catch (Exception e) {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
